@@ -1,7 +1,7 @@
 import { getCountryCode, getFlagEmoji } from "@/lib/flags";
 
 export function FlagIcon({ flag, nationality }: { flag?: string; nationality?: string }) {
-  const emoji = flag && !/^[A-Z]{2}$/.test(flag) ? flag : getFlagEmoji(flag || nationality || "");
+  const emoji = getFlagEmoji(nationality || flag || "");
   const code = getCountryCode(nationality || flag || "");
 
   return (
@@ -9,7 +9,7 @@ export function FlagIcon({ flag, nationality }: { flag?: string; nationality?: s
       <span className="text-xl leading-none" aria-label={nationality ? `${nationality} flag` : "flag"}>
         {emoji}
       </span>
-      <span className="text-xs font-semibold text-slate-500">{code !== "UN" ? code : ""}</span>
+      <span className="text-xs font-semibold text-slate-500">{code}</span>
     </span>
   );
 }

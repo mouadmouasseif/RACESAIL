@@ -17,3 +17,5 @@ export function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+export const fileToBase64 = fileToDataUrl;

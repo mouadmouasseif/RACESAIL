@@ -90,7 +90,7 @@ export async function downloadPdf(competition: Competition) {
       const countryCode = getCountryCode(athlete.nationality);
       return [
         athlete.rank,
-        `${getFlagEmoji(athlete.nationality)} ${countryCode !== "UN" ? countryCode : ""}`,
+        countryCode,
         athlete.clubName,
         athlete.category === "B" ? "B" : athlete.category === "J" ? "J" : "",
         athlete.sex,
@@ -150,10 +150,11 @@ function addPrizesPage(doc: jsPDF, autoTable: typeof import("jspdf-autotable").d
 function addLogo(doc: jsPDF, logo: string | undefined, x: number, y: number) {
   if (!logo) return;
   try {
+    if (!logo.startsWith("data:image")) return;
     const format = logo.includes("image/png") ? "PNG" : "JPEG";
     doc.addImage(logo, format, x, y, 18, 18);
-  } catch {
-    // Ignore invalid local images so exports never fail because of a logo.
+  } catch (error) {
+    console.warn("PDF image skipped", error);
   }
 }
 
@@ -169,15 +170,15 @@ function addPdfFooter(doc: jsPDF, appLogoBase64?: string) {
     doc.setFontSize(8);
     doc.text(`Page ${i} / ${pageCount}`, pageWidth - 25, pageHeight - 10);
     doc.text("Developed by Mouad Mouasseif", 14, pageHeight - 10);
-    doc.textWithLink("github.com/mouadmouasseif", 14, pageHeight - 5, {
-      url: "https://github.com/mouadmouasseif",
+    doc.textWithLink("mouadmouasseif", 14, pageHeight - 5, {
+      url: "https://mouadmouasseif.vercel.app/",
     });
 
-    if (appLogoBase64) {
+    if (appLogoBase64?.startsWith("data:image")) {
       try {
         doc.addImage(appLogoBase64, "PNG", pageWidth / 2 - 8, pageHeight - 16, 16, 16);
-      } catch {
-        // Footer text remains available if an embedded logo cannot be rendered.
+      } catch (error) {
+        console.warn("PDF footer image skipped", error);
       }
     }
   }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { FirebaseAnalytics } from "@/components/firebase-analytics";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <FirebaseAnalytics />
         <div className="min-h-screen">
           <header className="sticky top-0 z-40 border-b bg-white/85 backdrop-blur">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -42,7 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </header>
           {children}
           <footer className="border-t bg-white/80 px-4 py-5 text-center text-sm text-muted-foreground">
-            flooter creat by Mouadmouasseif :{" "}
+            creat by Mouadmouasseif :{" "}
             <a className="font-semibold text-sky-700 hover:text-sky-900" href="https://mouadmouasseif.vercel.app" target="_blank" rel="noreferrer">
               mouadmouasseif.vercel.app
             </a>

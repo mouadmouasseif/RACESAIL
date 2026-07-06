@@ -6,12 +6,20 @@ import { requestNotificationPermission } from "@/services/notificationService";
 
 export function LiveActions({ competitionId }: { competitionId: string }) {
   async function copyLiveLink() {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://racesail.vercel.app";
+    const origin = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "https://racesail.vercel.app");
     const link = `${origin}/competitions/${competitionId}/live`;
+
     try {
-      await navigator.clipboard.writeText(link);
-      alert("Live results link copied.");
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(link);
+        alert("Live results link copied.");
+        return;
+      }
     } catch {
+      // Fall through to prompt fallback.
+    }
+
+    if (typeof window !== "undefined") {
       window.prompt("Copy live results link", link);
     }
   }

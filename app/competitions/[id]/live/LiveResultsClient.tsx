@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Competition } from "@/types";
 import { rankAthletes } from "@/lib/scoring";
-import { competitionStore } from "@/services/localStorageService";
-import { isFirebaseConfigured, subscribeToLiveCompetition } from "@/services/firebaseService";
+import { isFirebaseConfigured, migrateFirebaseAthlete, subscribeToLiveCompetition } from "@/services/firebaseService";
 import { LiveActions } from "@/components/live-actions";
 import { NotificationPanel } from "@/components/notification-panel";
 import { PageShell } from "@/components/page-shell";
@@ -14,16 +13,13 @@ export default function LiveResultsClient({ competitionId }: { competitionId: st
   const [competition, setCompetition] = useState<Competition>();
 
   useEffect(() => {
-    const local = competitionStore.get(competitionId);
-    if (local) setCompetition(local);
-
     let unsubscribe: (() => void) | undefined;
     if (isFirebaseConfigured()) {
       void subscribeToLiveCompetition(competitionId, (payload) => {
         if (!payload.competition) return;
-        const raceCount = Number(payload.competition.raceCount) || local?.raceCount || 1;
+        const raceCount = Number(payload.competition.raceCount) || 1;
         const athletes = payload.athletes.map((athlete) => ({
-          ...athlete,
+          ...migrateFirebaseAthlete(athlete),
           results: Object.fromEntries(
             payload.results
               .filter((result) => result.sailNumber === athlete.sailNumber)
@@ -32,24 +28,20 @@ export default function LiveResultsClient({ competitionId }: { competitionId: st
         }));
 
         setCompetition({
-          ...(local ?? {
-            id: competitionId,
-            name: "Live Competition",
-            clubName: "",
-            location: "",
-            date: new Date().toISOString().slice(0, 10),
-            boatClass: "Optimist",
-            raceCount,
-            scoringSystem: "Low Point",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }),
           ...payload.competition,
           id: competitionId,
+          name: payload.competition.name ?? "Live Competition",
+          clubName: payload.competition.clubName ?? "",
+          location: payload.competition.location ?? "",
+          date: payload.competition.date ?? new Date().toISOString().slice(0, 10),
+          boatClass: payload.competition.boatClass ?? "Optimist",
           raceCount,
+          scoringSystem: "Low Point",
           athletes: rankAthletes(athletes, raceCount),
           races: payload.races,
           notifications: payload.notifications,
+          createdAt: payload.competition.createdAt ?? new Date().toISOString(),
+          updatedAt: payload.competition.updatedAt ?? new Date().toISOString(),
         } as Competition);
       }).then((cleanup) => {
         unsubscribe = cleanup;

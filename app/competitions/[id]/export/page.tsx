@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import type { Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
+import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { downloadCsv, downloadExcel, downloadPdf } from "@/lib/export";
 import { CompetitionNav } from "@/components/competition-nav";
 import { PageShell } from "@/components/page-shell";
@@ -15,9 +16,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function ExportPage() {
   const params = useParams<{ id: string }>();
   const [competition, setCompetition] = useState<Competition>();
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => setCompetition(competitionStore.get(params.id)), [params.id]);
+  useEffect(() => {
+    let active = true;
 
+    async function loadCompetition() {
+      setLoading(true);
+      try {
+        const firebaseCompetition = await getCompetitionFromFirestore(params.id);
+        if (active && firebaseCompetition) {
+          setCompetition(firebaseCompetition);
+          return;
+        }
+      } catch (error) {
+        console.error("Firebase export load failed", error);
+      } finally {
+        if (active) {
+          setCompetition((current) => current ?? competitionStore.get(params.id));
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCompetition();
+    return () => {
+      active = false;
+    };
+  }, [params.id]);
+
+  if (loading) return <PageShell title="Loading export data..." />;
   if (!competition) return <PageShell title="Competition not found" />;
 
   return (

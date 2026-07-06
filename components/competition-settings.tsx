@@ -5,6 +5,7 @@ import { boatClasses, type BoatClass, type Competition } from "@/types";
 import { createBlankRaces, rankAthletes, shouldApplyDiscard } from "@/lib/scoring";
 import { fileToDataUrl } from "@/lib/utils";
 import { competitionStore } from "@/services/localStorageService";
+import { syncCompetitionToFirestore } from "@/services/firebaseService";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,7 +72,10 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
       updatedAt: new Date().toISOString(),
     }));
 
-    if (updated) onSaved(updated);
+    if (updated) {
+      onSaved(updated);
+      void syncCompetitionToFirestore(updated);
+    }
   }
 
   return (

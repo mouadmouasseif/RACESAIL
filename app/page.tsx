@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { CloudUpload, Plus } from "lucide-react";
 import type { Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
+import { syncCompetitionsToFirestore } from "@/services/firebaseService";
 import { PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { CompetitionCard } from "@/components/competition-card";
@@ -13,6 +14,8 @@ import InstallAppButton from "@/components/install-app-button";
 
 export default function DashboardPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
     setCompetitions(competitionStore.list());
@@ -29,6 +32,21 @@ export default function DashboardPage() {
     setCompetitions(competitionStore.list());
   }
 
+  async function syncLocalData() {
+    setSyncing(true);
+    setSyncMessage("");
+    try {
+      const localCompetitions = competitionStore.list();
+      await syncCompetitionsToFirestore(localCompetitions);
+      setSyncMessage("Data synced to Firebase successfully.");
+    } catch (error) {
+      console.error("Firebase sync failed", error);
+      setSyncMessage("Firebase sync failed. Please check your connection and Firestore rules.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <PageShell
       title="Sailing competitions dashboard"
@@ -36,6 +54,10 @@ export default function DashboardPage() {
       actions={
         <>
           <InstallAppButton />
+          <Button onClick={syncLocalData} disabled={syncing} className="bg-white text-sky-900 hover:bg-sky-50">
+            <CloudUpload className="h-4 w-4" />
+            {syncing ? "Syncing..." : "Sync local data to Firebase"}
+          </Button>
           <Button asChild className="bg-white text-sky-900 hover:bg-sky-50">
             <Link href="/competitions/new"><Plus className="h-4 w-4" /> Create Competition</Link>
           </Button>
@@ -47,6 +69,11 @@ export default function DashboardPage() {
         <StatCard label="Athletes" value={athleteCount} />
         <StatCard label="Configured races" value={raceCount} />
       </div>
+      {syncMessage ? (
+        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900">
+          {syncMessage}
+        </div>
+      ) : null}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-slate-950">All competitions</h2>
         <Button asChild variant="ghost" size="sm"><Link href="/debug">Debug</Link></Button>

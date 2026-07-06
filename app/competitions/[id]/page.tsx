@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
+import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { CompetitionNav } from "@/components/competition-nav";
 import { CompetitionSettings } from "@/components/competition-settings";
 import { LogoImage } from "@/components/logo-image";
@@ -16,9 +17,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function CompetitionDetailPage() {
   const params = useParams<{ id: string }>();
   const [competition, setCompetition] = useState<Competition>();
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => setCompetition(competitionStore.get(params.id)), [params.id]);
+  useEffect(() => {
+    let active = true;
 
+    async function loadCompetition() {
+      setLoading(true);
+      try {
+        const firebaseCompetition = await getCompetitionFromFirestore(params.id);
+        if (active && firebaseCompetition) {
+          competitionStore.create(firebaseCompetition);
+          setCompetition(firebaseCompetition);
+          return;
+        }
+      } catch (error) {
+        console.error("Firebase competition load failed", error);
+      } finally {
+        if (active) {
+          setCompetition((current) => current ?? competitionStore.get(params.id));
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCompetition();
+    return () => {
+      active = false;
+    };
+  }, [params.id]);
+
+  if (loading) return <PageShell title="Loading competition..." description="Reading Firebase live data first." />;
   if (!competition) return <PageShell title="Competition not found" description="Return to the dashboard and choose a competition." />;
 
   return (
@@ -38,7 +67,7 @@ export default function CompetitionDetailPage() {
         <CardContent className="grid gap-5 md:grid-cols-2">
           <div className="flex items-center gap-4"><LogoImage src={competition.clubLogo} alt="Club logo" /><div><p className="font-semibold">{competition.clubName}</p><p className="text-sm text-muted-foreground">Club logo</p></div></div>
           <div className="flex items-center gap-4"><LogoImage src={competition.competitionLogo} alt="Competition logo" /><div><p className="font-semibold">{competition.name}</p><p className="text-sm text-muted-foreground">Competition logo</p></div></div>
-          <p><Badge variant="secondary">Low Point system</Badge></p>
+          <div><Badge variant="secondary">Low Point system</Badge></div>
           <p className="text-sm text-muted-foreground">Date: {new Date(competition.date).toLocaleDateString()}</p>
         </CardContent>
       </Card>
