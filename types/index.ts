@@ -5,6 +5,7 @@ export const raceStatuses = ["Draft", "Finished", "Corrected"] as const;
 export type PenaltyCode = (typeof penaltyCodes)[number];
 export type BoatClass = (typeof boatClasses)[number];
 export type RaceStatus = (typeof raceStatuses)[number];
+export type Sex = "M" | "F";
 
 export type RaceResult = {
   raceNumber: number;
@@ -20,6 +21,8 @@ export type Athlete = {
   firstName: string;
   lastName: string;
   age: number;
+  sex: Sex;
+  category: string;
   nationality: string;
   flag: string;
   clubName: string;

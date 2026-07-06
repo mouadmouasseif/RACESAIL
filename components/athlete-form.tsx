@@ -7,7 +7,7 @@ import { Save, UserPlus, X } from "lucide-react";
 import { boatClasses, type Athlete, type Competition } from "@/types";
 import { athleteSchema, type AthleteFormValues } from "@/lib/validations";
 import { createId, fileToDataUrl } from "@/lib/utils";
-import { getFlagForNationality } from "@/lib/flags";
+import { getAthleteCategory, getFlagForNationality } from "@/lib/flags";
 import { rankAthletes } from "@/lib/scoring";
 import { competitionStore } from "@/services/localStorageService";
 import { Button } from "@/components/ui/button";
@@ -34,12 +34,13 @@ export function AthleteForm({
       firstName: editingAthlete.firstName,
       lastName: editingAthlete.lastName,
       age: editingAthlete.age,
+      sex: editingAthlete.sex,
       nationality: editingAthlete.nationality,
       clubName: editingAthlete.clubName,
       sailNumber: editingAthlete.sailNumber,
       boatClass: editingAthlete.boatClass,
       licenseNumber: editingAthlete.licenseNumber,
-    } : { boatClass: competition.boatClass },
+    } : { boatClass: competition.boatClass, sex: "M" },
   });
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function AthleteForm({
         firstName: editingAthlete.firstName,
         lastName: editingAthlete.lastName,
         age: editingAthlete.age,
+        sex: editingAthlete.sex,
         nationality: editingAthlete.nationality,
         clubName: editingAthlete.clubName,
         sailNumber: editingAthlete.sailNumber,
@@ -58,7 +60,7 @@ export function AthleteForm({
       return;
     }
 
-    reset({ boatClass: competition.boatClass });
+    reset({ boatClass: competition.boatClass, sex: "M" });
     setClubLogo(undefined);
   }, [competition.boatClass, editingAthlete, reset]);
 
@@ -83,6 +85,7 @@ export function AthleteForm({
           return {
             ...athlete,
             ...values,
+            category: getAthleteCategory(values.age),
             flag: getFlagForNationality(values.nationality),
             clubLogo,
             results,
@@ -110,6 +113,7 @@ export function AthleteForm({
     const athlete: Athlete = {
       id: createId("athlete"),
       ...values,
+      category: getAthleteCategory(values.age),
       flag: getFlagForNationality(values.nationality),
       clubLogo,
       results: {},
@@ -127,7 +131,7 @@ export function AthleteForm({
 
     if (updated) onSaved(updated);
     setClubLogo(undefined);
-    reset({ boatClass: competition.boatClass });
+    reset({ boatClass: competition.boatClass, sex: "M" });
   }
 
   return (
@@ -138,6 +142,15 @@ export function AthleteForm({
           <Field label="First name" error={errors.firstName?.message}><Input {...register("firstName")} /></Field>
           <Field label="Last name" error={errors.lastName?.message}><Input {...register("lastName")} /></Field>
           <Field label="Age" error={errors.age?.message}><Input type="number" {...register("age")} /></Field>
+          <Field label="Sex" error={errors.sex?.message}>
+            <Select value={watch("sex") ?? "M"} onValueChange={(value) => setValue("sex", value as AthleteFormValues["sex"])}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="M">M</SelectItem>
+                <SelectItem value="F">F</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Nationality" error={errors.nationality?.message}><Input {...register("nationality")} placeholder="Morocco" /></Field>
           <Field label="Club name" error={errors.clubName?.message}><Input {...register("clubName")} /></Field>
           <Field label="Club logo"><Input type="file" accept="image/*" onChange={(event) => handleLogo(event.target.files)} /></Field>

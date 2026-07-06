@@ -6,14 +6,14 @@ function result(raceNumber: number, sailNumber: string, position: number | undef
 }
 
 const athletes: Athlete[] = [
-  { id: "ath-1", firstName: "Yassine", lastName: "Alaoui", age: 13, nationality: "Morocco", flag: "MA", clubName: "Royal Sailing Club", sailNumber: "MAR 121", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 1 },
-  { id: "ath-2", firstName: "Noura", lastName: "Benali", age: 12, nationality: "Morocco", flag: "MA", clubName: "Tangier Yacht Club", sailNumber: "MAR 144", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 2 },
-  { id: "ath-3", firstName: "Omar", lastName: "Al Mansoori", age: 13, nationality: "UAE", flag: "AE", clubName: "Dubai Offshore Sailing Club", sailNumber: "UAE 08", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 3 },
-  { id: "ath-4", firstName: "Lina", lastName: "Al Nuaimi", age: 11, nationality: "UAE", flag: "AE", clubName: "Abu Dhabi Sailing Academy", sailNumber: "UAE 17", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 4 },
-  { id: "ath-5", firstName: "Camille", lastName: "Moreau", age: 12, nationality: "France", flag: "FR", clubName: "CN Marseille", sailNumber: "FRA 62", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 5 },
-  { id: "ath-6", firstName: "Theo", lastName: "Bernard", age: 13, nationality: "France", flag: "FR", clubName: "La Rochelle Nautique", sailNumber: "FRA 88", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 6 },
-  { id: "ath-7", firstName: "Giulia", lastName: "Rossi", age: 12, nationality: "Italy", flag: "IT", clubName: "Yacht Club Italiano", sailNumber: "ITA 35", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 7 },
-  { id: "ath-8", firstName: "Marco", lastName: "Bianchi", age: 11, nationality: "Italy", flag: "IT", clubName: "Circolo Vela Bari", sailNumber: "ITA 49", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 8 },
+  { id: "ath-1", firstName: "Yassine", lastName: "Alaoui", age: 13, sex: "M", category: "Open", nationality: "Morocco", flag: "🇲🇦", clubName: "Royal Sailing Club", sailNumber: "MAR 121", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 1 },
+  { id: "ath-2", firstName: "Noura", lastName: "Benali", age: 12, sex: "F", category: "Open", nationality: "Morocco", flag: "🇲🇦", clubName: "Tangier Yacht Club", sailNumber: "MAR 144", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 2 },
+  { id: "ath-3", firstName: "Omar", lastName: "Al Mansoori", age: 13, sex: "M", category: "Open", nationality: "UAE", flag: "🇦🇪", clubName: "Dubai Offshore Sailing Club", sailNumber: "UAE 08", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 3 },
+  { id: "ath-4", firstName: "Lina", lastName: "Al Nuaimi", age: 11, sex: "F", category: "B", nationality: "UAE", flag: "🇦🇪", clubName: "Abu Dhabi Sailing Academy", sailNumber: "UAE 17", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 4 },
+  { id: "ath-5", firstName: "Camille", lastName: "Moreau", age: 12, sex: "F", category: "Open", nationality: "France", flag: "🇫🇷", clubName: "CN Marseille", sailNumber: "FRA 62", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 5 },
+  { id: "ath-6", firstName: "Theo", lastName: "Bernard", age: 13, sex: "M", category: "Open", nationality: "France", flag: "🇫🇷", clubName: "La Rochelle Nautique", sailNumber: "FRA 88", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 6 },
+  { id: "ath-7", firstName: "Giulia", lastName: "Rossi", age: 12, sex: "F", category: "Open", nationality: "Italy", flag: "🇮🇹", clubName: "Yacht Club Italiano", sailNumber: "ITA 35", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 7 },
+  { id: "ath-8", firstName: "Marco", lastName: "Bianchi", age: 11, sex: "M", category: "B", nationality: "Italy", flag: "🇮🇹", clubName: "Circolo Vela Bari", sailNumber: "ITA 49", boatClass: "Optimist", results: {}, total: 0, discard: 0, net: 0, rank: 8 },
 ];
 
 const seededResults: RaceResult[] = [

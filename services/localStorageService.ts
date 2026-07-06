@@ -1,9 +1,9 @@
 "use client";
 
-import type { Athlete, BoatClass, Competition, RaceResult } from "@/types";
+import type { Athlete, BoatClass, Competition, RaceResult, Sex } from "@/types";
 import { demoCompetition } from "@/services/seed";
 import { createBlankRaces, rankAthletes, scoreRaceResult } from "@/lib/scoring";
-import { normalizeFlagCode } from "@/lib/flags";
+import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 
 const STORAGE_KEY = "raceSail.competitions";
 
@@ -32,8 +32,10 @@ function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string,
     firstName: athlete.firstName ?? "",
     lastName: athlete.lastName ?? "",
     age: athlete.age ?? 0,
+    sex: (athlete.sex as Sex) ?? "M",
+    category: athlete.category || getAthleteCategory(athlete.age ?? 0),
     nationality: athlete.nationality ?? "",
-    flag: normalizeFlagCode(athlete.flag, athlete.nationality ?? ""),
+    flag: getFlagEmoji(athlete.nationality || athlete.flag || ""),
     clubName: athlete.clubName ?? "",
     clubLogo: athlete.clubLogo,
     sailNumber: athlete.sailNumber ?? "",

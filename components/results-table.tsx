@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pencil, Trash2 } from "lucide-react";
 import { FlagIcon } from "@/components/flag-icon";
+import { LogoImage } from "@/components/logo-image";
 
 function rankBadge(rank: number) {
   if (rank === 1) return <Badge variant="gold">1</Badge>;
@@ -33,13 +34,14 @@ export function ResultsTable({
         <TableHeader>
           <TableRow className="bg-slate-50">
             <TableHead>Rank</TableHead>
-            <TableHead>Sail Number</TableHead>
+            <TableHead>Sail</TableHead>
             <TableHead>Flag</TableHead>
+            <TableHead>Athlete</TableHead>
+            <TableHead>Sex</TableHead>
+            <TableHead>Category</TableHead>
             <TableHead>Nationality</TableHead>
-            <TableHead>First Name</TableHead>
-            <TableHead>Last Name</TableHead>
+            <TableHead>Club Logo</TableHead>
             <TableHead>Club</TableHead>
-            <TableHead>Boat Class</TableHead>
             {raceColumns.map((raceNumber) => <TableHead key={raceNumber}>Race {raceNumber}</TableHead>)}
             <TableHead>Total</TableHead>
             <TableHead>Discard</TableHead>
@@ -55,12 +57,18 @@ export function ResultsTable({
               <TableRow key={athlete.id} className={athlete.rank <= 3 ? "bg-cyan-50/60" : undefined}>
                 <TableCell>{rankBadge(athlete.rank)}</TableCell>
                 <TableCell className="font-mono font-semibold">{athlete.sailNumber}</TableCell>
-                <TableCell><FlagIcon code={athlete.flag} nationality={athlete.nationality} /></TableCell>
+                <TableCell><FlagIcon flag={athlete.flag} nationality={athlete.nationality} /></TableCell>
+                <TableCell className="font-semibold">{athlete.firstName} {athlete.lastName}</TableCell>
+                <TableCell>{athlete.sex}</TableCell>
+                <TableCell>{athlete.category}</TableCell>
                 <TableCell>{athlete.nationality}</TableCell>
-                <TableCell>{athlete.firstName}</TableCell>
-                <TableCell className="font-semibold">{athlete.lastName}</TableCell>
-                <TableCell>{athlete.clubName}</TableCell>
-                <TableCell>{athlete.boatClass}</TableCell>
+                <TableCell><LogoImage src={athlete.clubLogo} alt={`${athlete.clubName} logo`} className="h-8 w-8" /></TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-2">
+                    <LogoImage src={athlete.clubLogo} alt={`${athlete.clubName} logo`} className="h-7 w-7" />
+                    <span>{athlete.clubName}</span>
+                  </span>
+                </TableCell>
                 {raceColumns.map((raceNumber) => (
                   <TableCell key={raceNumber} className={discardedRaceNumbers.has(raceNumber) ? "font-semibold text-slate-500" : undefined}>
                     {formatRaceCell(athlete.results[raceNumber], discardedRaceNumbers.has(raceNumber))}

@@ -14,6 +14,7 @@ export const athleteSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
   lastName: z.string().min(2, "Last name is required"),
   age: z.coerce.number().int().min(5, "Age is too low").max(100, "Age is too high"),
+  sex: z.enum(["M", "F"]),
   nationality: z.string().min(2, "Nationality is required"),
   clubName: z.string().min(2, "Club is required"),
   sailNumber: z.string().min(1, "Sail number is required"),
