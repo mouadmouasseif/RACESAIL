@@ -1,6 +1,7 @@
 {
   "name": "raceSail",
   "short_name": "raceSail",
+  "version": "1.0.2",
   "description": "Simple sailing competition management",
   "start_url": "/",
   "scope": "/",

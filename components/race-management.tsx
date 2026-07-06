@@ -5,6 +5,8 @@ import { CheckCircle2, Search, Save, Unlock } from "lucide-react";
 import { penaltyCodes, type Competition, type PenaltyCode, type RaceResult, type RaceStatus } from "@/types";
 import { createBlankRaces, makeRaceResult, raceNumbers, rankAthletes } from "@/lib/scoring";
 import { competitionStore } from "@/services/localStorageService";
+import { createRaceNotification, syncCompetitionToFirestore } from "@/services/firebaseService";
+import { showRaceFinishedNotification } from "@/services/notificationService";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +24,7 @@ type DraftResult = {
 export function RaceManagement({ competition, onSaved }: { competition: Competition; onSaved: (competition: Competition) => void }) {
   const [raceNumber, setRaceNumber] = useState(1);
   const [search, setSearch] = useState("");
+  const [highlightedSail, setHighlightedSail] = useState("");
   const [drafts, setDrafts] = useState<Record<string, DraftResult>>({});
   const race = competition.races.find((item) => item.raceNumber === raceNumber);
 
@@ -45,6 +48,20 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
 
   function updateDraft(sailNumber: string, patch: Partial<DraftResult>) {
     setDrafts((current) => ({ ...current, [draftKey(sailNumber)]: { ...getDraft(sailNumber), ...patch } }));
+  }
+
+  function selectFirstSearchResult() {
+    const target = rows[0];
+    if (!target) return;
+    setHighlightedSail(target.sailNumber);
+    window.setTimeout(() => {
+      document.getElementById(`race-row-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`race-position-${target.id}`)?.focus();
+    }, 0);
+  }
+
+  function createId(prefix: string) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   function saveRace(status?: RaceStatus) {
@@ -93,6 +110,21 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
     if (updated) {
       onSaved(updated);
       setDrafts({});
+      void syncCompetitionToFirestore(updated);
+      if (status === "Finished") {
+        const notification = {
+          id: createId("notification"),
+          competitionId: competition.id,
+          raceNumber,
+          title: `Race ${raceNumber} finished`,
+          message: `Race ${raceNumber} finished. Results are now available.`,
+          createdAt: new Date().toISOString(),
+          read: false,
+        };
+        competitionStore.notify(competition.id, notification);
+        void createRaceNotification(notification);
+        showRaceFinishedNotification(notification);
+      }
     }
   }
 
@@ -119,7 +151,16 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
             <Label>Search sail number</Label>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="MAR 121" />
+              <Input
+                className="pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") selectFirstSearchResult();
+                  if (event.key === "Escape") setSearch("");
+                }}
+                placeholder="Sail Number"
+              />
             </div>
           </div>
           <Button variant="secondary" onClick={() => saveRace("Draft")}><Save className="h-4 w-4" /> Save race</Button>
@@ -145,10 +186,10 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
               {rows.map((athlete) => {
                 const draft = getDraft(athlete.sailNumber);
                 return (
-                  <TableRow key={athlete.id}>
+                  <TableRow id={`race-row-${athlete.id}`} key={athlete.id} className={highlightedSail === athlete.sailNumber ? "bg-sky-100" : undefined}>
                     <TableCell className="font-mono font-semibold">{athlete.sailNumber}</TableCell>
                     <TableCell>{athlete.firstName} {athlete.lastName}</TableCell>
-                    <TableCell><Input type="number" min={1} value={draft.position} disabled={draft.penalty !== "OK"} onChange={(event) => updateDraft(athlete.sailNumber, { position: event.target.value })} /></TableCell>
+                    <TableCell><Input id={`race-position-${athlete.id}`} type="number" min={1} value={draft.position} disabled={draft.penalty !== "OK"} onChange={(event) => updateDraft(athlete.sailNumber, { position: event.target.value })} /></TableCell>
                     <TableCell>
                       <Select value={draft.penalty} onValueChange={(value) => updateDraft(athlete.sailNumber, { penalty: value as PenaltyCode })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>

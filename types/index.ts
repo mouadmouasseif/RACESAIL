@@ -44,6 +44,16 @@ export type Race = {
   updatedAt: string;
 };
 
+export type RaceNotification = {
+  id: string;
+  competitionId: string;
+  raceNumber: number;
+  title: string;
+  message: string;
+  createdAt: string;
+  read?: boolean;
+};
+
 export type Competition = {
   id: string;
   name: string;
@@ -57,6 +67,7 @@ export type Competition = {
   scoringSystem: "Low Point";
   athletes: Athlete[];
   races: Race[];
+  notifications?: RaceNotification[];
   createdAt: string;
   updatedAt: string;
 };

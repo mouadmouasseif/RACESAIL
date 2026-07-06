@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, RotateCcw } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
 import { PageShell } from "@/components/page-shell";
@@ -49,9 +49,7 @@ export default function DashboardPage() {
       </div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-slate-950">All competitions</h2>
-        <Button variant="ghost" size="sm" onClick={() => { competitionStore.resetDemo(); setCompetitions(competitionStore.list()); }}>
-          <RotateCcw className="h-4 w-4" /> Reset demo
-        </Button>
+        <Button asChild variant="ghost" size="sm"><Link href="/debug">Debug</Link></Button>
       </div>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {competitions.map((competition) => (

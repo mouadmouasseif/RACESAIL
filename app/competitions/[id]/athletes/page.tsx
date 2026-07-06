@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import type { Athlete, Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
 import { rankAthletes } from "@/lib/scoring";
+import { createId } from "@/lib/utils";
 import { AthleteForm } from "@/components/athlete-form";
 import { CompetitionNav } from "@/components/competition-nav";
 import { PageShell } from "@/components/page-shell";
@@ -36,6 +37,26 @@ export default function AthletesPage() {
     }
   }
 
+  function duplicateAthlete(athlete: Athlete) {
+    if (!competition) return;
+    const duplicated: Athlete = {
+      ...athlete,
+      id: createId("athlete"),
+      sailNumber: `${athlete.sailNumber}-copy`,
+      results: {},
+      total: 0,
+      discard: 0,
+      net: 0,
+      rank: competition.athletes.length + 1,
+    };
+    const updated = competitionStore.update(competition.id, (current) => ({
+      ...current,
+      athletes: rankAthletes([...current.athletes, duplicated], current.raceCount),
+      updatedAt: new Date().toISOString(),
+    }));
+    if (updated) setCompetition(updated);
+  }
+
   return (
     <PageShell title="Athletes Management" description={competition.name}>
       <CompetitionNav id={competition.id} />
@@ -49,7 +70,13 @@ export default function AthletesPage() {
             setEditingAthlete(undefined);
           }}
         />
-        <ResultsTable competition={competition} onDeleteAthlete={deleteAthlete} onEditAthlete={setEditingAthlete} />
+        <ResultsTable
+          competition={competition}
+          onDeleteAthlete={deleteAthlete}
+          onEditAthlete={setEditingAthlete}
+          onDuplicateAthlete={duplicateAthlete}
+          searchable
+        />
       </div>
     </PageShell>
   );

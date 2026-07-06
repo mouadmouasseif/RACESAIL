@@ -1,6 +1,6 @@
 "use client";
 
-import type { Athlete, BoatClass, Competition, RaceResult, Sex } from "@/types";
+import type { Athlete, BoatClass, Competition, RaceNotification, RaceResult, Sex } from "@/types";
 import { demoCompetition } from "@/services/seed";
 import { createBlankRaces, rankAthletes, scoreRaceResult } from "@/lib/scoring";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
@@ -9,6 +9,55 @@ const STORAGE_KEY = "raceSail.competitions";
 
 function isBrowser() {
   return typeof window !== "undefined";
+}
+
+function createSafeId(prefix: string) {
+  const random =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${random}`;
+}
+
+function safeGetItem(key: string) {
+  if (!isBrowser()) return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.error("raceSail localStorage read failed", error);
+    return null;
+  }
+}
+
+export function safeGetLocalStorage<T>(key: string, fallback: T): T {
+  const raw = safeGetItem(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    console.error("localStorage read error", error);
+    return fallback;
+  }
+}
+
+function safeSetItem(key: string, value: string) {
+  if (!isBrowser()) return false;
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.error("raceSail localStorage write failed", error);
+    return false;
+  }
+}
+
+function safeRemoveItem(key: string) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    console.error("raceSail localStorage remove failed", error);
+  }
 }
 
 function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string, number | RaceResult> }, athleteCount: number): Athlete {
@@ -28,7 +77,7 @@ function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string,
   });
 
   return {
-    id: athlete.id ?? crypto.randomUUID(),
+    id: athlete.id ?? createSafeId("athlete"),
     firstName: athlete.firstName ?? "",
     lastName: athlete.lastName ?? "",
     age: athlete.age ?? 0,
@@ -60,7 +109,7 @@ function normalizeCompetition(competition: Partial<Competition> & { status?: str
   }));
 
   return {
-    id: competition.id ?? crypto.randomUUID(),
+    id: competition.id ?? createSafeId("competition"),
     name: competition.name ?? "Untitled Competition",
     clubName: competition.clubName ?? "",
     clubLogo: competition.clubLogo,
@@ -72,6 +121,7 @@ function normalizeCompetition(competition: Partial<Competition> & { status?: str
     scoringSystem: "Low Point",
     athletes,
     races,
+    notifications: competition.notifications ?? [],
     createdAt: competition.createdAt ?? new Date().toISOString(),
     updatedAt: competition.updatedAt ?? new Date().toISOString(),
   };
@@ -79,7 +129,7 @@ function normalizeCompetition(competition: Partial<Competition> & { status?: str
 
 function readStorage(): Competition[] {
   if (!isBrowser()) return [];
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = safeGetItem(STORAGE_KEY);
   if (!raw) {
     saveCompetitions([demoCompetition]);
     return [demoCompetition];
@@ -87,19 +137,19 @@ function readStorage(): Competition[] {
 
   try {
     const competitions = (JSON.parse(raw) as Competition[]).map(normalizeCompetition);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(competitions));
+    safeSetItem(STORAGE_KEY, JSON.stringify(competitions));
     return competitions;
-  } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
-    saveCompetitions([demoCompetition]);
-    return [demoCompetition];
+  } catch (error) {
+    console.error("raceSail localStorage JSON migration failed", error);
+    return [];
   }
 }
 
 function saveCompetitions(competitions: Competition[]) {
   if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(competitions));
-  window.dispatchEvent(new Event("raceSail:storage"));
+  if (safeSetItem(STORAGE_KEY, JSON.stringify(competitions))) {
+    window.dispatchEvent(new Event("raceSail:storage"));
+  }
 }
 
 export function getCompetitions() {
@@ -141,6 +191,20 @@ export function resetDemoData() {
   saveCompetitions([demoCompetition]);
 }
 
+export function addLocalNotification(competitionId: string, notification: RaceNotification) {
+  return updateCompetition(competitionId, (competition) => ({
+    ...competition,
+    notifications: [notification, ...(competition.notifications ?? [])],
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
+export function clearCompetitionData() {
+  if (!isBrowser()) return;
+  safeRemoveItem(STORAGE_KEY);
+  window.dispatchEvent(new Event("raceSail:storage"));
+}
+
 export const competitionStore = {
   list: getCompetitions,
   get: getCompetitionById,
@@ -148,4 +212,6 @@ export const competitionStore = {
   update: updateCompetition,
   delete: deleteCompetition,
   resetDemo: resetDemoData,
+  clear: clearCompetitionData,
+  notify: addLocalNotification,
 };
