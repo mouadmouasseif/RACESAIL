@@ -38,6 +38,8 @@ const athletesWithResults = athletes.map((athlete) => ({
 
 export const demoCompetition: Competition = {
   id: "demo-optimist-cup-2026",
+  publicCode: "RACE-2026-DEMO",
+  isLivePublished: true,
   name: "International Optimist Cup 2026",
   clubName: "Royal Sailing Club",
   location: "Casablanca, Morocco",
@@ -47,7 +49,7 @@ export const demoCompetition: Competition = {
   scoringSystem: "Low Point",
   createdAt: "2026-07-06T10:00:00.000Z",
   updatedAt: "2026-07-06T10:00:00.000Z",
-  athletes: rankAthletes(athletesWithResults, 9),
+  athletes: rankAthletes(athletesWithResults, 9, 5),
   races: createBlankRaces(9).map((race) => ({
     ...race,
     status: race.raceNumber <= 5 ? "Finished" : "Draft",

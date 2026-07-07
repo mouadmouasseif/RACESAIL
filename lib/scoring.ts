@@ -12,8 +12,12 @@ export function calculatePenaltyPoints(athleteCount: number): number {
   return athleteCount + 1;
 }
 
-export function shouldApplyDiscard(raceCount: number): boolean {
-  return raceCount >= 4;
+export function getFinishedRaceCount(races: Race[] = []) {
+  return races.filter((race) => race.status === "Finished" || race.status === "Corrected").length;
+}
+
+export function shouldApplyDiscard(finishedRaceCount: number): boolean {
+  return finishedRaceCount >= 5;
 }
 
 export function scoreRaceResult(result: RaceResult, athleteCount: number): RaceResult {
@@ -35,6 +39,7 @@ export function calculateAthleteScores(
   athlete: Athlete,
   raceCount: number,
   athleteCount: number,
+  finishedRaceCount = 0,
 ): Athlete {
   const scoredResults: Record<number, RaceResult> = { ...athlete.results };
   const scores: number[] = [];
@@ -49,7 +54,7 @@ export function calculateAthleteScores(
   }
 
   const total = scores.reduce((sum, score) => sum + score, 0);
-  const discard = shouldApplyDiscard(raceCount) && scores.length > 0 ? Math.max(...scores) : 0;
+  const discard = shouldApplyDiscard(finishedRaceCount) && scores.length > 0 ? Math.max(...scores) : 0;
   const net = total - discard;
 
   return {
@@ -61,9 +66,9 @@ export function calculateAthleteScores(
   };
 }
 
-export function rankAthletes(athletes: Athlete[], raceCount: number): Athlete[] {
+export function rankAthletes(athletes: Athlete[], raceCount: number, finishedRaceCount = 0): Athlete[] {
   const athleteCount = athletes.length;
-  const scoredAthletes = athletes.map((athlete) => calculateAthleteScores(athlete, raceCount, athleteCount));
+  const scoredAthletes = athletes.map((athlete) => calculateAthleteScores(athlete, raceCount, athleteCount, finishedRaceCount));
 
   scoredAthletes.sort((a, b) => {
     if (a.net !== b.net) return a.net - b.net;
@@ -77,8 +82,8 @@ export function rankAthletes(athletes: Athlete[], raceCount: number): Athlete[] 
   }));
 }
 
-export function rankedAthletes(athletes: Athlete[], raceCount?: number) {
-  if (typeof raceCount === "number") return rankAthletes(athletes, raceCount);
+export function rankedAthletes(athletes: Athlete[], raceCount?: number, finishedRaceCount = 0) {
+  if (typeof raceCount === "number") return rankAthletes(athletes, raceCount, finishedRaceCount);
   return [...athletes].sort((a, b) => a.rank - b.rank || a.net - b.net || a.lastName.localeCompare(b.lastName));
 }
 
@@ -115,7 +120,7 @@ export function formatRaceCell(result: RaceResult | undefined, isDiscarded: bool
 }
 
 export function getDiscardedRaceNumbers(athlete: Athlete, raceCount: number) {
-  if (!shouldApplyDiscard(raceCount) || !athlete.discard) return new Set<number>();
+  if (!athlete.discard) return new Set<number>();
   for (let raceNumber = 1; raceNumber <= raceCount; raceNumber++) {
     const result = athlete.results[raceNumber];
     if (result && result.points === athlete.discard) return new Set([raceNumber]);

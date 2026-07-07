@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Search, Save, Unlock } from "lucide-react";
 import { penaltyCodes, type Competition, type PenaltyCode, type RaceResult, type RaceStatus } from "@/types";
-import { createBlankRaces, makeRaceResult, raceNumbers, rankAthletes } from "@/lib/scoring";
+import { createBlankRaces, getFinishedRaceCount, makeRaceResult, raceNumbers, rankAthletes } from "@/lib/scoring";
 import { competitionStore } from "@/services/localStorageService";
 import { createRaceNotification, syncCompetitionToFirestore } from "@/services/firebaseService";
 import { showRaceFinishedNotification } from "@/services/notificationService";
@@ -83,15 +83,12 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
         resultsBySail.set(athlete.sailNumber, result);
       });
 
-      const athletes = rankAthletes(
-        current.athletes.map((athlete) => ({
-          ...athlete,
-          results: resultsBySail.has(athlete.sailNumber)
-            ? { ...athlete.results, [raceNumber]: resultsBySail.get(athlete.sailNumber)! }
-            : athlete.results,
-        })),
-        current.raceCount,
-      );
+      const athletesWithResults = current.athletes.map((athlete) => ({
+        ...athlete,
+        results: resultsBySail.has(athlete.sailNumber)
+          ? { ...athlete.results, [raceNumber]: resultsBySail.get(athlete.sailNumber)! }
+          : athlete.results,
+      }));
 
       const races = createBlankRaces(current.raceCount, current.races).map((item) => {
         if (item.raceNumber !== raceNumber) return item;
@@ -99,10 +96,15 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
         return {
           ...item,
           status: nextStatus,
-          results: athletes.map((athlete) => athlete.results[raceNumber]).filter(Boolean),
+          results: athletesWithResults.map((athlete) => athlete.results[raceNumber]).filter(Boolean),
           updatedAt: new Date().toISOString(),
         };
       });
+      const athletes = rankAthletes(
+        athletesWithResults,
+        current.raceCount,
+        getFinishedRaceCount(races),
+      );
 
       return { ...current, athletes, races, updatedAt: new Date().toISOString() };
     });

@@ -2,8 +2,9 @@
 
 import type { Athlete, BoatClass, Competition, RaceNotification, RaceResult, Sex } from "@/types";
 import { demoCompetition } from "@/services/seed";
-import { createBlankRaces, rankAthletes, scoreRaceResult } from "@/lib/scoring";
+import { createBlankRaces, getFinishedRaceCount, rankAthletes, scoreRaceResult } from "@/lib/scoring";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
+import { generateCompetitionCode } from "@/lib/utils";
 
 const STORAGE_KEY = "raceSail.competitions";
 const OLD_SYNC_QUEUE_KEY = "raceSail.firebaseSyncQueue";
@@ -106,15 +107,18 @@ function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string,
 function normalizeCompetition(competition: Partial<Competition> & { status?: string }): Competition {
   const raceCount = Math.min(9, Math.max(1, Number(competition.raceCount) || 1));
   const rawAthletes = competition.athletes ?? [];
-  const athletes = rankAthletes(rawAthletes.map((athlete) => normalizeAthlete(athlete, rawAthletes.length)), raceCount);
-  const raceResults = athletes.flatMap((athlete) => Object.values(athlete.results));
+  const normalizedAthletes = rawAthletes.map((athlete) => normalizeAthlete(athlete, rawAthletes.length));
+  const raceResults = normalizedAthletes.flatMap((athlete) => Object.values(athlete.results));
   const races = createBlankRaces(raceCount, competition.races).map((race) => ({
     ...race,
     results: raceResults.filter((result) => result.raceNumber === race.raceNumber),
   }));
+  const athletes = rankAthletes(normalizedAthletes, raceCount, getFinishedRaceCount(races));
 
   return {
     id: competition.id ?? createSafeId("competition"),
+    publicCode: competition.publicCode ?? generateCompetitionCode(),
+    isLivePublished: competition.isLivePublished ?? false,
     name: competition.name ?? "Untitled Competition",
     clubName: competition.clubName ?? "",
     clubLogo: competition.clubLogo,

@@ -8,7 +8,7 @@ import { boatClasses, type Athlete, type Competition } from "@/types";
 import { athleteSchema, type AthleteFormValues } from "@/lib/validations";
 import { createId, fileToDataUrl } from "@/lib/utils";
 import { getAthleteCategory, getFlagForNationality } from "@/lib/flags";
-import { rankAthletes } from "@/lib/scoring";
+import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
 import { competitionStore } from "@/services/localStorageService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,7 +94,7 @@ export function AthleteForm({
 
         return {
           ...current,
-          athletes: rankAthletes(athletes, current.raceCount),
+          athletes: rankAthletes(athletes, current.raceCount, getFinishedRaceCount(current.races)),
           races: current.races.map((race) => ({
             ...race,
             results: race.results.map((result) =>
@@ -126,7 +126,7 @@ export function AthleteForm({
     const updated = competitionStore.update(competition.id, (current) => ({
       ...current,
       updatedAt: new Date().toISOString(),
-      athletes: rankAthletes([...current.athletes, athlete], current.raceCount),
+      athletes: rankAthletes([...current.athletes, athlete], current.raceCount, getFinishedRaceCount(current.races)),
     }));
 
     if (updated) onSaved(updated);

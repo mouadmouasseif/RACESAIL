@@ -56,6 +56,8 @@ export type RaceNotification = {
 
 export type Competition = {
   id: string;
+  publicCode: string;
+  isLivePublished: boolean;
   name: string;
   clubName: string;
   clubLogo?: string;

@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Save } from "lucide-react";
 import { boatClasses, type Competition } from "@/types";
 import { competitionSchema, type CompetitionFormValues } from "@/lib/validations";
-import { createId, fileToDataUrl } from "@/lib/utils";
+import { createId, fileToDataUrl, generateCompetitionCode } from "@/lib/utils";
 import { competitionStore } from "@/services/localStorageService";
 import { syncCompetitionToFirestore } from "@/services/firebaseService";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ export function CompetitionForm() {
   function onSubmit(values: CompetitionFormValues) {
     const competition: Competition = {
       id: createId("competition"),
+      publicCode: generateCompetitionCode(),
+      isLivePublished: false,
       ...values,
       clubLogo,
       competitionLogo,

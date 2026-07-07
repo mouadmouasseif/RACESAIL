@@ -2,6 +2,7 @@
 
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -12,7 +13,7 @@ import {
 import { getDownloadURL, ref, uploadString } from "firebase/storage";
 import type { Athlete, BoatClass, Competition, Race, RaceNotification, RaceResult, Sex } from "@/types";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
-import { rankAthletes } from "@/lib/scoring";
+import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
 import { getFirebaseClient, getFirebaseStatus, notifyFirebaseError } from "@/lib/firebase";
 import { queueAthlete, queueCompetition, queueNotification, queueRace, queueResult, syncPendingChanges } from "@/lib/firebaseSync";
 
@@ -176,6 +177,12 @@ export async function syncCompetitionToFirestore(competition: Competition) {
   try {
     const { db } = client;
     await setDoc(doc(db, "competitions", competition.id), await competitionMetadata(competition), { merge: true });
+    if (competition.isLivePublished && competition.publicCode) {
+      await setDoc(doc(db, "liveCodes", competition.publicCode), {
+        competitionId: competition.id,
+        createdAt: competition.createdAt,
+      }, { merge: true });
+    }
 
     await Promise.all([
       ...competition.athletes.map(async (athlete) =>
@@ -201,6 +208,65 @@ export async function syncCompetitionToFirestore(competition: Competition) {
     console.error("Unable to synchronize with Firebase.", error);
     await queueSmallCompetitionWrites(competition);
     notifyFirebaseError("Unable to synchronize with Firebase.");
+  }
+}
+
+export async function publishCompetitionLive(competition: Competition) {
+  const client = getFirebaseClient();
+  if (!client) {
+    notifyFirebaseError("Firebase is not configured. Add environment variables in Vercel and redeploy.");
+    return false;
+  }
+
+  const published = { ...competition, isLivePublished: true, updatedAt: new Date().toISOString() };
+  try {
+    await syncCompetitionToFirestore(published);
+    await setDoc(doc(client.db, "liveCodes", published.publicCode), {
+      competitionId: published.id,
+      createdAt: published.createdAt,
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Unable to publish live results.", error);
+    notifyFirebaseError("Unable to synchronize with Firebase.");
+    return false;
+  }
+}
+
+export async function unpublishCompetitionLive(competition: Competition) {
+  const client = getFirebaseClient();
+  if (!client) {
+    notifyFirebaseError("Firebase is not configured. Add environment variables in Vercel and redeploy.");
+    return false;
+  }
+
+  try {
+    await setDoc(doc(client.db, "competitions", competition.id), {
+      isLivePublished: false,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    if (competition.publicCode) await deleteDoc(doc(client.db, "liveCodes", competition.publicCode));
+    return true;
+  } catch (error) {
+    console.error("Unable to unpublish live results.", error);
+    notifyFirebaseError("Unable to synchronize with Firebase.");
+    return false;
+  }
+}
+
+export async function getCompetitionIdByPublicCode(publicCode: string) {
+  const client = getFirebaseClient();
+  if (!client) return undefined;
+
+  try {
+    const snapshot = await getDoc(doc(client.db, "liveCodes", publicCode.trim().toUpperCase()));
+    if (!snapshot.exists()) return undefined;
+    const data = snapshot.data() as { competitionId?: string };
+    return data.competitionId;
+  } catch (error) {
+    console.error("Unable to load live code.", error);
+    notifyFirebaseError("Unable to synchronize with Firebase.");
+    return undefined;
   }
 }
 
@@ -243,9 +309,11 @@ export async function getCompetitionFromFirestore(competitionId: string): Promis
       };
     });
 
-    return {
+    const competition = {
       id: competitionId,
       name: competitionData.name ?? "Live Competition",
+      publicCode: competitionData.publicCode ?? "",
+      isLivePublished: competitionData.isLivePublished ?? false,
       clubName: competitionData.clubName ?? "",
       clubLogo: competitionData.clubLogo,
       competitionLogo: competitionData.competitionLogo,
@@ -254,13 +322,18 @@ export async function getCompetitionFromFirestore(competitionId: string): Promis
       boatClass: competitionData.boatClass ?? "Optimist",
       raceCount,
       scoringSystem: "Low Point",
-      athletes: rankAthletes(athletes, raceCount),
+      athletes: [],
       races: raceSnapshot.docs.map((item) => item.data() as Race).sort((a, b) => a.raceNumber - b.raceNumber),
       notifications: notificationSnapshot.docs
         .map((item) => item.data() as RaceNotification)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       createdAt: competitionData.createdAt ?? new Date().toISOString(),
       updatedAt: competitionData.updatedAt ?? new Date().toISOString(),
+    } satisfies Competition;
+
+    return {
+      ...competition,
+      athletes: rankAthletes(athletes, raceCount, getFinishedRaceCount(competition.races)),
     };
   } catch (error) {
     console.error("Unable to load Firebase competition.", error);

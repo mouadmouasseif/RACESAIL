@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getFirebaseClient, getFirebaseStatus } from "@/lib/firebase";
+import { clearOversizedSyncQueue } from "@/lib/cleanupStorage";
 import { clearFirebaseSyncQueue, getPendingChanges, syncPendingChanges } from "@/lib/firebaseSync";
+import { competitionStore } from "@/services/localStorageService";
 import { PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +54,7 @@ export default function FirebaseAdminPage() {
     try {
       const client = getFirebaseClient();
       if (!client) {
-        void refresh("Firebase is not initialized");
+        void refresh("Firebase is not configured. Add environment variables in Vercel and redeploy.");
         return;
       }
 
@@ -79,6 +81,17 @@ export default function FirebaseAdminPage() {
     void refresh("Sync queue cleared");
   }
 
+  function clearOversizedCache() {
+    const cleared = clearOversizedSyncQueue();
+    void refresh(cleared ? "Oversized cache cleared" : "No oversized cache found");
+  }
+
+  function resetLocalData() {
+    if (!window.confirm("Reset all local raceSail data on this device?")) return;
+    competitionStore.clear();
+    void refresh("Local data reset");
+  }
+
   return (
     <PageShell title="Firebase admin" description="Connection diagnostics for raceSail realtime sync.">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -95,7 +108,12 @@ export default function FirebaseAdminPage() {
             <StatusRow label="Current user" value={state.currentUser} />
             {state.missing.length > 0 ? (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
-                Missing Firebase environment variables: {state.missing.join(", ")}
+                Firebase is not configured. Add environment variables in Vercel and redeploy.
+              </div>
+            ) : null}
+            {state.usingDevelopmentFallback ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                Development fallback Firebase config is active. Production still requires Vercel environment variables.
               </div>
             ) : null}
           </CardContent>
@@ -104,9 +122,22 @@ export default function FirebaseAdminPage() {
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Button onClick={testFirestore} disabled={testing}>{testing ? "Testing..." : "Test Firestore connection"}</Button>
-            <Button variant="secondary" onClick={syncQueue}>Sync pending changes</Button>
+            <Button onClick={testFirestore} disabled={testing || !state.syncEnabled}>{testing ? "Testing..." : "Test Firestore connection"}</Button>
+            <Button variant="secondary" onClick={syncQueue} disabled={!state.syncEnabled}>Sync pending changes</Button>
             <Button variant="outline" onClick={clearQueue}>Clear sync queue</Button>
+            <Button variant="outline" onClick={clearOversizedCache}>Clear oversized cache</Button>
+            <Button variant="destructive" onClick={resetLocalData}>Reset all local data</Button>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle>Required Vercel Environment Variables</CardTitle></CardHeader>
+          <CardContent className="grid gap-2 text-sm text-slate-700">
+            <code>NEXT_PUBLIC_FIREBASE_API_KEY</code>
+            <code>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</code>
+            <code>NEXT_PUBLIC_FIREBASE_PROJECT_ID</code>
+            <code>NEXT_PUBLIC_FIREBASE_APP_ID</code>
+            <p className="font-medium text-sky-800">After adding env vars: Redeploy the project.</p>
           </CardContent>
         </Card>
       </div>

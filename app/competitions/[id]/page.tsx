@@ -7,6 +7,7 @@ import { competitionStore } from "@/services/localStorageService";
 import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { CompetitionNav } from "@/components/competition-nav";
 import { CompetitionSettings } from "@/components/competition-settings";
+import { LivePublishControls } from "@/components/live-publish-controls";
 import { LogoImage } from "@/components/logo-image";
 import { PageShell } from "@/components/page-shell";
 import { ResultsTable } from "@/components/results-table";
@@ -62,6 +63,7 @@ export default function CompetitionDetailPage() {
       <div className="mb-6">
         <CompetitionSettings competition={competition} onSaved={setCompetition} />
       </div>
+      <LivePublishControls competition={competition} onSaved={setCompetition} />
       <Card className="mb-6">
         <CardHeader><CardTitle>Competition profile</CardTitle></CardHeader>
         <CardContent className="grid gap-5 md:grid-cols-2">

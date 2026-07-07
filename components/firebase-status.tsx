@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getPendingChanges, syncPendingChanges } from "@/lib/firebaseSync";
 import { migrateOldLocalStorageQueue } from "@/lib/indexedDbQueue";
+import { clearOversizedSyncQueue } from "@/lib/cleanupStorage";
 
 export function FirebaseStatusBadge() {
   const [online, setOnline] = useState(true);
@@ -39,6 +40,7 @@ export function FirebaseStatusBadge() {
     const handleQueueChange = () => void refreshQueue();
 
     setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    clearOversizedSyncQueue();
     void migrateOldLocalStorageQueue();
     void refreshQueue();
 

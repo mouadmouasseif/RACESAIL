@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { boatClasses, type BoatClass, type Competition } from "@/types";
-import { createBlankRaces, rankAthletes, shouldApplyDiscard } from "@/lib/scoring";
+import { createBlankRaces, getFinishedRaceCount, rankAthletes, shouldApplyDiscard } from "@/lib/scoring";
 import { fileToDataUrl } from "@/lib/utils";
 import { competitionStore } from "@/services/localStorageService";
 import { syncCompetitionToFirestore } from "@/services/firebaseService";
@@ -51,26 +51,30 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
       }
     }
 
-    const updated = competitionStore.update(competition.id, (current) => ({
-      ...current,
-      name: name.trim(),
-      clubName: clubName.trim(),
-      clubLogo,
-      competitionLogo,
-      location: location.trim(),
-      date,
-      boatClass,
-      raceCount: nextRaceCount,
-      races: createBlankRaces(nextRaceCount, current.races),
-      athletes: rankAthletes(
-        current.athletes.map((athlete) => ({
-          ...athlete,
-          boatClass: athlete.boatClass || boatClass,
-        })),
-        nextRaceCount,
-      ),
-      updatedAt: new Date().toISOString(),
-    }));
+    const updated = competitionStore.update(competition.id, (current) => {
+      const races = createBlankRaces(nextRaceCount, current.races);
+      return {
+        ...current,
+        name: name.trim(),
+        clubName: clubName.trim(),
+        clubLogo,
+        competitionLogo,
+        location: location.trim(),
+        date,
+        boatClass,
+        raceCount: nextRaceCount,
+        races,
+        athletes: rankAthletes(
+          current.athletes.map((athlete) => ({
+            ...athlete,
+            boatClass: athlete.boatClass || boatClass,
+          })),
+          nextRaceCount,
+          getFinishedRaceCount(races),
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
 
     if (updated) {
       onSaved(updated);
@@ -119,7 +123,7 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Badge variant="secondary">Low Point</Badge>
-          {shouldApplyDiscard(competition.raceCount) ? <Badge variant="success">Discard active after 4 races</Badge> : <Badge variant="secondary">No discard before 4 races</Badge>}
+          {shouldApplyDiscard(getFinishedRaceCount(competition.races)) ? <Badge variant="success">Discard active after R5 finished</Badge> : <Badge variant="secondary">No discard before R5 is finished</Badge>}
         </div>
         <div className="md:col-span-2">
           <Button onClick={saveCompetitionSettings}>Save competition changes</Button>

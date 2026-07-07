@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Athlete, Competition } from "@/types";
-import { formatRaceCell, getDiscardedRaceNumbers, raceNumbers, rankedAthletes } from "@/lib/scoring";
+import { formatRaceCell, getDiscardedRaceNumbers, getFinishedRaceCount, raceNumbers, rankedAthletes } from "@/lib/scoring";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,6 +33,7 @@ export function ResultsTable({
   searchable?: boolean;
 }) {
   const raceColumns = raceNumbers(competition.raceCount);
+  const finishedRaceCount = getFinishedRaceCount(competition.races);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState({ country: "all", club: "all", boatClass: "all", sex: "all", category: "all" });
@@ -66,7 +67,7 @@ export function ResultsTable({
 
   const rows = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
-    const filtered = rankedAthletes(athletes, competition.raceCount).filter((athlete) => {
+    const filtered = rankedAthletes(athletes, competition.raceCount, finishedRaceCount).filter((athlete) => {
       const fullName = `${athlete.firstName} ${athlete.lastName}`;
       const searchableText = [
         athlete.firstName,
@@ -91,7 +92,7 @@ export function ResultsTable({
 
     filtered.sort((a, b) => compareAthletes(a, b, sortKey) * (sortDirection === "asc" ? 1 : -1));
     return filtered;
-  }, [athletes, competition.raceCount, debouncedSearch, filters, sortDirection, sortKey]);
+  }, [athletes, competition.raceCount, debouncedSearch, filters, sortDirection, sortKey, finishedRaceCount]);
 
   const visibleRows = rows.length > 300 ? rows.slice(0, 300) : rows;
 

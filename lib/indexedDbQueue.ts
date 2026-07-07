@@ -7,15 +7,17 @@ const DB_NAME = "raceSailFirebaseQueue";
 const STORE_NAME = "pendingWrites";
 const DB_VERSION = 1;
 const MAX_QUEUE_ITEMS = 500;
-const OLD_QUEUE_BYTE_LIMIT = 150_000;
+const OLD_QUEUE_BYTE_LIMIT = 500 * 1024;
 
 export type QueuePayload = Record<string, unknown>;
 
 export type QueuedWrite = {
   id: string;
   type: string;
+  competitionId: string;
   path: string;
-  documentId: string;
+  docId: string;
+  documentId?: string;
   payload: QueuePayload;
   createdAt: string;
 };
@@ -141,7 +143,7 @@ export async function migrateOldLocalStorageQueue() {
     if (raw.length > OLD_QUEUE_BYTE_LIMIT) {
       window.localStorage.removeItem(OLD_SYNC_QUEUE_KEY);
       window.dispatchEvent(new CustomEvent("raceSail:firebase-error", {
-        detail: "Old sync queue cleared because it was too large.",
+        detail: "Old Firebase sync queue cleared because it was too large.",
       }));
       dispatchQueueChange();
       return true;

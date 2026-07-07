@@ -2,7 +2,7 @@
 
 import { collection, doc, setDoc } from "firebase/firestore";
 import type { Athlete, Competition, Race, RaceNotification, RaceResult } from "@/types";
-import { getFirebaseClient, notifyFirebaseError } from "@/lib/firebase";
+import { getFirebaseClient, getFirebaseConfigStatus, notifyFirebaseError } from "@/lib/firebase";
 import {
   addQueuedWrite,
   clearFirebaseSyncQueue,
@@ -77,34 +77,44 @@ function logoReference(value?: string) {
   return value;
 }
 
-async function queueWrite(type: string, path: string, documentId: string, payload: QueuePayload) {
-  await addQueuedWrite({ type, path, documentId, payload });
+async function queueWrite(type: string, competitionId: string, path: string, documentId: string, payload: QueuePayload) {
+  const status = getFirebaseConfigStatus();
+  if (!status.syncEnabled) {
+    notifyFirebaseError("Firebase not configured. Data kept locally only.");
+    return;
+  }
+
+  await addQueuedWrite({ type, competitionId, path, docId: documentId, payload });
 }
 
 export async function queueCompetition(competition: Competition) {
-  await queueWrite("competition:update", "competitions", competition.id, competitionMetadata(competition));
+  await queueWrite("competition:update", competition.id, "competitions", competition.id, competitionMetadata(competition));
 }
 
 export async function queueAthlete(competitionId: string, athlete: Athlete) {
-  await queueWrite("athlete:update", `competitions/${competitionId}/athletes`, athlete.id, athletePayload(athlete));
+  await queueWrite("athlete:update", competitionId, `competitions/${competitionId}/athletes`, athlete.id, athletePayload(athlete));
 }
 
 export async function queueRace(competitionId: string, race: Race) {
-  await queueWrite("race:update", `competitions/${competitionId}/races`, String(race.raceNumber), racePayload(race));
+  await queueWrite("race:update", competitionId, `competitions/${competitionId}/races`, String(race.raceNumber), racePayload(race));
 }
 
 export async function queueResult(competitionId: string, athleteId: string, result: RaceResult) {
-  await queueWrite("result:update", `competitions/${competitionId}/results`, resultDocumentId(result), {
+  await queueWrite("result:update", competitionId, `competitions/${competitionId}/results`, resultDocumentId(result), {
     competitionId,
     athleteId,
     raceNumber: result.raceNumber,
-    result: sanitizeQueuePayload(result),
+    position: result.position,
+    penalty: result.penalty,
+    points: result.points,
+    notes: result.notes,
   });
 }
 
 export async function queueNotification(notification: RaceNotification) {
   await queueWrite(
     "notification:update",
+    notification.competitionId,
     `competitions/${notification.competitionId}/notifications`,
     notification.id,
     sanitizeQueuePayload(notification),
@@ -124,7 +134,7 @@ async function writeQueueItem(item: QueuedWrite) {
   if (!client) throw new Error("Firebase is not initialized.");
 
   await setDoc(
-    doc(collection(client.db, item.path), item.documentId),
+    doc(collection(client.db, item.path), item.docId ?? item.documentId ?? item.id),
     cleanForFirestore(item.payload),
     { merge: true },
   );

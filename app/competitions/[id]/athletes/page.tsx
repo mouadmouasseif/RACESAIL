@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import type { Athlete, Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
 import { getCompetitionFromFirestore, syncCompetitionToFirestore } from "@/services/firebaseService";
-import { rankAthletes } from "@/lib/scoring";
+import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
 import { createId } from "@/lib/utils";
 import { AthleteForm } from "@/components/athlete-form";
 import { CompetitionNav } from "@/components/competition-nav";
@@ -55,7 +55,7 @@ export default function AthletesPage() {
       const athletes = current.athletes.filter((athlete) => athlete.id !== athleteId);
       return {
         ...current,
-        athletes: rankAthletes(athletes, current.raceCount),
+        athletes: rankAthletes(athletes, current.raceCount, getFinishedRaceCount(current.races)),
         races: current.races.map((race) => ({ ...race, results: race.results.filter((result) => athletes.some((athlete) => athlete.sailNumber === result.sailNumber)) })),
         updatedAt: new Date().toISOString(),
       };
@@ -81,7 +81,7 @@ export default function AthletesPage() {
     };
     const updated = competitionStore.update(competition.id, (current) => ({
       ...current,
-      athletes: rankAthletes([...current.athletes, duplicated], current.raceCount),
+      athletes: rankAthletes([...current.athletes, duplicated], current.raceCount, getFinishedRaceCount(current.races)),
       updatedAt: new Date().toISOString(),
     }));
     if (updated) {
