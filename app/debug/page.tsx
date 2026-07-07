@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, Database, RotateCcw } from "lucide-react";
+import { clearFirebaseSyncQueue } from "@/lib/firebaseSync";
 import { competitionStore } from "@/services/localStorageService";
 import { PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,12 @@ export default function DebugPage() {
     setMessage("Demo data restored.");
   }
 
+  async function clearSyncQueue() {
+    if (!window.confirm("Clear Firebase sync queue on this device? Competitions will not be deleted.")) return;
+    await clearFirebaseSyncQueue();
+    setMessage("Firebase sync queue cleared. Competitions were not deleted.");
+  }
+
   return (
     <PageShell title="Debug" description="Local device tools for raceSail data recovery.">
       <Card>
@@ -31,6 +38,7 @@ export default function DebugPage() {
         <CardContent className="flex flex-wrap gap-3">
           <Button variant="destructive" onClick={resetLocalData}><Database className="h-4 w-4" /> Reset local data</Button>
           <Button variant="outline" onClick={seedDemoData}><RotateCcw className="h-4 w-4" /> Restore demo data</Button>
+          <Button variant="outline" onClick={clearSyncQueue}>Clear sync queue</Button>
           {message ? <p className="w-full text-sm font-medium text-sky-800">{message}</p> : null}
         </CardContent>
       </Card>

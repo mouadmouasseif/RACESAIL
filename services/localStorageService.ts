@@ -6,6 +6,7 @@ import { createBlankRaces, rankAthletes, scoreRaceResult } from "@/lib/scoring";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 
 const STORAGE_KEY = "raceSail.competitions";
+const OLD_SYNC_QUEUE_KEY = "raceSail.firebaseSyncQueue";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -46,6 +47,10 @@ function safeSetItem(key: string, value: string) {
     window.localStorage.setItem(key, value);
     return true;
   } catch (error) {
+    if (error instanceof DOMException && error.name === "QuotaExceededError") {
+      console.warn("Storage full, clearing old sync queue");
+      window.localStorage.removeItem(OLD_SYNC_QUEUE_KEY);
+    }
     console.error("raceSail localStorage write failed", error);
     return false;
   }

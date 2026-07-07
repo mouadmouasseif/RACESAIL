@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { syncPendingChanges, getPendingChanges } from "@/lib/firebaseSync";
+import { getPendingChanges, syncPendingChanges } from "@/lib/firebaseSync";
+import { migrateOldLocalStorageQueue } from "@/lib/indexedDbQueue";
 
 export function FirebaseStatusBadge() {
   const [online, setOnline] = useState(true);
@@ -9,13 +10,17 @@ export function FirebaseStatusBadge() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    function refreshQueue() {
-      setPendingCount(getPendingChanges().length);
+    let active = true;
+
+    async function refreshQueue() {
+      const pending = await getPendingChanges();
+      if (active) setPendingCount(pending.length);
     }
 
     async function handleOnline() {
       setOnline(true);
       const result = await syncPendingChanges();
+      if (!active) return;
       setPendingCount(result.pending);
       if (result.synced > 0) setMessage("Firebase synchronized.");
     }
@@ -28,23 +33,27 @@ export function FirebaseStatusBadge() {
     function handleFirebaseError(event: Event) {
       const detail = event instanceof CustomEvent ? String(event.detail ?? "") : "";
       setMessage(detail || "Unable to synchronize with Firebase.");
-      refreshQueue();
+      void refreshQueue();
     }
 
+    const handleQueueChange = () => void refreshQueue();
+
     setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
-    refreshQueue();
+    void migrateOldLocalStorageQueue();
+    void refreshQueue();
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    window.addEventListener("raceSail:sync-queue", refreshQueue);
+    window.addEventListener("raceSail:sync-queue", handleQueueChange);
     window.addEventListener("raceSail:firebase-error", handleFirebaseError);
 
     if (navigator.onLine) void handleOnline();
 
     return () => {
+      active = false;
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("raceSail:sync-queue", refreshQueue);
+      window.removeEventListener("raceSail:sync-queue", handleQueueChange);
       window.removeEventListener("raceSail:firebase-error", handleFirebaseError);
     };
   }, []);
@@ -52,7 +61,7 @@ export function FirebaseStatusBadge() {
   return (
     <div className="flex flex-col items-end gap-1">
       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${online ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-        {online ? "🟢 Online" : "🔴 Offline"}
+        {online ? "Online" : "Offline"}
         {pendingCount > 0 ? ` - ${pendingCount} pending` : ""}
       </span>
       {message ? (

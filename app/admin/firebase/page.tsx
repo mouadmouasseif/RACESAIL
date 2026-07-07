@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getFirebaseClient, getFirebaseStatus } from "@/lib/firebase";
-import { getPendingChanges, syncPendingChanges } from "@/lib/firebaseSync";
+import { clearFirebaseSyncQueue, getPendingChanges, syncPendingChanges } from "@/lib/firebaseSync";
 import { PageShell } from "@/components/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,18 +24,19 @@ export default function FirebaseAdminPage() {
   }));
   const [testing, setTesting] = useState(false);
 
-  const refresh = useCallback((firestoreStatus = "Not tested") => {
+  const refresh = useCallback(async (firestoreStatus = "Not tested") => {
+    const pending = await getPendingChanges();
     setState({
       ...getFirebaseStatus(),
       online: typeof navigator !== "undefined" ? navigator.onLine : true,
-      pending: getPendingChanges().length,
+      pending: pending.length,
       firestoreStatus,
     });
   }, []);
 
   useEffect(() => {
-    refresh();
-    const onRefresh = () => refresh();
+    void refresh();
+    const onRefresh = () => void refresh();
     window.addEventListener("online", onRefresh);
     window.addEventListener("offline", onRefresh);
     window.addEventListener("raceSail:sync-queue", onRefresh);
@@ -51,17 +52,17 @@ export default function FirebaseAdminPage() {
     try {
       const client = getFirebaseClient();
       if (!client) {
-        refresh("Firebase is not initialized");
+        void refresh("Firebase is not initialized");
         return;
       }
 
       const ref = doc(client.db, "debug", "connection");
       await setDoc(ref, { checkedAt: new Date().toISOString(), app: "raceSail" }, { merge: true });
       const snapshot = await getDoc(ref);
-      refresh(snapshot.exists() ? "Connected" : "Write failed");
+      void refresh(snapshot.exists() ? "Connected" : "Write failed");
     } catch (error) {
       console.error("Firestore connection test failed", error);
-      refresh("Unable to synchronize with Firebase.");
+      void refresh("Unable to synchronize with Firebase.");
     } finally {
       setTesting(false);
     }
@@ -69,7 +70,13 @@ export default function FirebaseAdminPage() {
 
   async function syncQueue() {
     const result = await syncPendingChanges();
-    refresh(result.pending === 0 ? "Pending queue synchronized" : "Some changes are still pending");
+    void refresh(result.pending === 0 ? "Pending queue synchronized" : "Some changes are still pending");
+  }
+
+  async function clearQueue() {
+    if (!window.confirm("Clear Firebase sync queue on this device? Competitions will not be deleted.")) return;
+    await clearFirebaseSyncQueue();
+    void refresh("Sync queue cleared");
   }
 
   return (
@@ -99,6 +106,7 @@ export default function FirebaseAdminPage() {
           <CardContent className="flex flex-wrap gap-3">
             <Button onClick={testFirestore} disabled={testing}>{testing ? "Testing..." : "Test Firestore connection"}</Button>
             <Button variant="secondary" onClick={syncQueue}>Sync pending changes</Button>
+            <Button variant="outline" onClick={clearQueue}>Clear sync queue</Button>
           </CardContent>
         </Card>
       </div>

@@ -9,11 +9,12 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadString } from "firebase/storage";
 import type { Athlete, BoatClass, Competition, Race, RaceNotification, RaceResult, Sex } from "@/types";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 import { rankAthletes } from "@/lib/scoring";
 import { getFirebaseClient, getFirebaseStatus, notifyFirebaseError } from "@/lib/firebase";
-import { queueCompetition, syncPendingChanges } from "@/lib/firebaseSync";
+import { queueAthlete, queueCompetition, queueNotification, queueRace, queueResult, syncPendingChanges } from "@/lib/firebaseSync";
 
 export function isFirebaseConfigured() {
   return getFirebaseStatus().missing.length === 0;
@@ -69,6 +70,71 @@ function collectRaceResults(competition: Competition) {
   return Array.from(results.entries());
 }
 
+async function logoReference(value: string | undefined, path: string) {
+  if (!value) return undefined;
+  if (value.startsWith("blob:")) return undefined;
+  if (!value.startsWith("data:image")) return value;
+
+  const client = getFirebaseClient();
+  if (!client) return undefined;
+
+  const logoRef = ref(client.storage, path);
+  await uploadString(logoRef, value, "data_url");
+  return getDownloadURL(logoRef);
+}
+
+async function competitionMetadata(competition: Competition) {
+  const [clubLogo, competitionLogo] = await Promise.all([
+    logoReference(competition.clubLogo, `logos/competitions/${competition.id}/club-logo`),
+    logoReference(competition.competitionLogo, `logos/competitions/${competition.id}/competition-logo`),
+  ]);
+
+  return cleanForFirestore({
+    ...competition,
+    clubLogo,
+    competitionLogo,
+    athletes: [],
+    races: [],
+    notifications: [],
+  });
+}
+
+async function athleteDocument(competitionId: string, athlete: Athlete) {
+  const clubLogo = await logoReference(athlete.clubLogo, `logos/competitions/${competitionId}/athletes/${athlete.id}-club-logo`);
+  return cleanForFirestore({
+    ...athlete,
+    clubLogo,
+    results: {},
+  });
+}
+
+function raceDocument(race: Race) {
+  return cleanForFirestore({
+    ...race,
+    results: [],
+  });
+}
+
+function resultDocument(result: RaceResult) {
+  return cleanForFirestore(result);
+}
+
+function notificationDocument(notification: RaceNotification) {
+  return cleanForFirestore(notification);
+}
+
+async function queueSmallCompetitionWrites(competition: Competition) {
+  await Promise.all([
+    queueCompetition(competition),
+    ...competition.athletes.map((athlete) => queueAthlete(competition.id, athlete)),
+    ...competition.races.map((race) => queueRace(competition.id, race)),
+    ...competition.athletes.flatMap((athlete) =>
+      Object.values(athlete.results ?? {}).map((result) => queueResult(competition.id, athlete.id, result)),
+    ),
+    ...(competition.notifications ?? []).map((notification) => queueNotification(notification)),
+  ]);
+}
+
 export function migrateFirebaseAthlete(athlete: Partial<Athlete>): Athlete {
   return {
     id: athlete.id ?? `athlete-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -96,45 +162,44 @@ export async function syncCompetitionToFirestore(competition: Competition) {
   if (typeof window === "undefined") return;
 
   if (!window.navigator.onLine) {
-    queueCompetition(competition);
+    await queueSmallCompetitionWrites(competition);
     return;
   }
 
   const client = getFirebaseClient();
   if (!client) {
-    queueCompetition(competition);
+    await queueSmallCompetitionWrites(competition);
     notifyFirebaseError("Missing Firebase environment variables.");
     return;
   }
 
   try {
     const { db } = client;
-    await setDoc(doc(db, "competitions", competition.id), cleanForFirestore({
-      ...competition,
-      athletes: [],
-      races: [],
-      notifications: [],
-    }));
+    await setDoc(doc(db, "competitions", competition.id), await competitionMetadata(competition), { merge: true });
 
     await Promise.all([
-      ...competition.athletes.map((athlete) =>
-        setDoc(doc(collection(db, "competitions", competition.id, "athletes"), athlete.id), cleanForFirestore(athlete)),
+      ...competition.athletes.map(async (athlete) =>
+        setDoc(
+          doc(collection(db, "competitions", competition.id, "athletes"), athlete.id),
+          await athleteDocument(competition.id, athlete),
+          { merge: true },
+        ),
       ),
       ...competition.races.map((race) =>
-        setDoc(doc(collection(db, "competitions", competition.id, "races"), String(race.raceNumber)), cleanForFirestore(race)),
+        setDoc(doc(collection(db, "competitions", competition.id, "races"), String(race.raceNumber)), raceDocument(race), { merge: true }),
       ),
       ...collectRaceResults(competition).map(([id, result]) =>
-        setDoc(doc(collection(db, "competitions", competition.id, "results"), id), cleanForFirestore(result)),
+        setDoc(doc(collection(db, "competitions", competition.id, "results"), id), resultDocument(result), { merge: true }),
       ),
       ...(competition.notifications ?? []).map((notification) =>
-        setDoc(doc(collection(db, "competitions", competition.id, "notifications"), notification.id), cleanForFirestore(notification)),
+        setDoc(doc(collection(db, "competitions", competition.id, "notifications"), notification.id), notificationDocument(notification), { merge: true }),
       ),
     ]);
 
     await syncPendingChanges();
   } catch (error) {
     console.error("Unable to synchronize with Firebase.", error);
-    queueCompetition(competition);
+    await queueSmallCompetitionWrites(competition);
     notifyFirebaseError("Unable to synchronize with Firebase.");
   }
 }
@@ -209,6 +274,7 @@ export async function createRaceNotification(notification: RaceNotification) {
 
   const client = getFirebaseClient();
   if (!client) {
+    await queueNotification(notification);
     notifyFirebaseError("Missing Firebase environment variables.");
     return;
   }
@@ -216,10 +282,11 @@ export async function createRaceNotification(notification: RaceNotification) {
   try {
     await setDoc(
       doc(collection(client.db, "competitions", notification.competitionId, "notifications"), notification.id),
-      cleanForFirestore(notification),
+      notificationDocument(notification),
     );
   } catch (error) {
     console.error("Unable to synchronize with Firebase.", error);
+    await queueNotification(notification);
     notifyFirebaseError("Unable to synchronize with Firebase.");
   }
 }

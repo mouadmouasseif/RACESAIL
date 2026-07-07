@@ -1,44 +1,24 @@
 "use client";
 
 import { collection, doc, setDoc } from "firebase/firestore";
-import type { Athlete, Competition, Race, RaceResult } from "@/types";
+import type { Athlete, Competition, Race, RaceNotification, RaceResult } from "@/types";
 import { getFirebaseClient, notifyFirebaseError } from "@/lib/firebase";
-
-const SYNC_QUEUE_KEY = "raceSail.firebaseSyncQueue";
-
-type SyncQueueItem =
-  | { id: string; type: "competition"; competition: Competition; createdAt: string }
-  | { id: string; type: "athlete"; competitionId: string; athlete: Athlete; createdAt: string }
-  | { id: string; type: "race"; competitionId: string; race: Race; createdAt: string }
-  | { id: string; type: "result"; competitionId: string; result: RaceResult; createdAt: string };
+import {
+  addQueuedWrite,
+  clearFirebaseSyncQueue,
+  getQueuedWrites,
+  removeQueuedWrite,
+  sanitizeQueuePayload,
+  type QueuePayload,
+  type QueuedWrite,
+} from "@/lib/indexedDbQueue";
 
 function isBrowser() {
   return typeof window !== "undefined";
 }
 
-function createQueueId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function readQueue(): SyncQueueItem[] {
-  if (!isBrowser()) return [];
-  try {
-    const raw = window.localStorage.getItem(SYNC_QUEUE_KEY);
-    return raw ? JSON.parse(raw) as SyncQueueItem[] : [];
-  } catch (error) {
-    console.error("Unable to read Firebase sync queue", error);
-    return [];
-  }
-}
-
-function writeQueue(queue: SyncQueueItem[]) {
-  if (!isBrowser()) return;
-  try {
-    window.localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
-    window.dispatchEvent(new Event("raceSail:sync-queue"));
-  } catch (error) {
-    console.error("Unable to write Firebase sync queue", error);
-  }
+function resultDocumentId(result: RaceResult) {
+  return `${result.raceNumber}-${encodeURIComponent(result.sailNumber)}`;
 }
 
 function cleanForFirestore<T>(value: T): T {
@@ -55,118 +35,122 @@ function cleanForFirestore<T>(value: T): T {
   return value;
 }
 
-function resultDocumentId(result: RaceResult) {
-  return `${result.raceNumber}-${encodeURIComponent(result.sailNumber)}`;
+function withoutLargeFields<T extends Record<string, unknown>>(payload: T) {
+  return sanitizeQueuePayload(payload) as QueuePayload;
 }
 
-function queueItem(item: SyncQueueItem) {
-  writeQueue([...readQueue(), item]);
+function competitionMetadata(competition: Competition) {
+  return withoutLargeFields({
+    id: competition.id,
+    name: competition.name,
+    clubName: competition.clubName,
+    clubLogo: logoReference(competition.clubLogo),
+    competitionLogo: logoReference(competition.competitionLogo),
+    location: competition.location,
+    date: competition.date,
+    boatClass: competition.boatClass,
+    raceCount: competition.raceCount,
+    scoringSystem: competition.scoringSystem,
+    createdAt: competition.createdAt,
+    updatedAt: competition.updatedAt,
+  });
 }
 
-export function queueCompetition(competition: Competition) {
-  queueItem({ id: createQueueId("competition"), type: "competition", competition, createdAt: new Date().toISOString() });
+function athletePayload(athlete: Athlete) {
+  return withoutLargeFields({
+    ...athlete,
+    clubLogo: logoReference(athlete.clubLogo),
+    results: {},
+  });
 }
 
-export function queueAthlete(competitionId: string, athlete: Athlete) {
-  queueItem({ id: createQueueId("athlete"), type: "athlete", competitionId, athlete, createdAt: new Date().toISOString() });
+function racePayload(race: Race) {
+  return withoutLargeFields({
+    ...race,
+    results: [],
+  });
 }
 
-export function queueRace(competitionId: string, race: Race) {
-  queueItem({ id: createQueueId("race"), type: "race", competitionId, race, createdAt: new Date().toISOString() });
+function logoReference(value?: string) {
+  if (!value) return undefined;
+  if (value.startsWith("data:image") || value.startsWith("blob:")) return undefined;
+  return value;
 }
 
-export function queueResult(competitionId: string, result: RaceResult) {
-  queueItem({ id: createQueueId("result"), type: "result", competitionId, result, createdAt: new Date().toISOString() });
+async function queueWrite(type: string, path: string, documentId: string, payload: QueuePayload) {
+  await addQueuedWrite({ type, path, documentId, payload });
 }
 
-export function getPendingChanges() {
-  return readQueue();
+export async function queueCompetition(competition: Competition) {
+  await queueWrite("competition:update", "competitions", competition.id, competitionMetadata(competition));
 }
 
-export function clearPendingChanges() {
-  writeQueue([]);
+export async function queueAthlete(competitionId: string, athlete: Athlete) {
+  await queueWrite("athlete:update", `competitions/${competitionId}/athletes`, athlete.id, athletePayload(athlete));
 }
 
-async function writeCompetition(competition: Competition) {
+export async function queueRace(competitionId: string, race: Race) {
+  await queueWrite("race:update", `competitions/${competitionId}/races`, String(race.raceNumber), racePayload(race));
+}
+
+export async function queueResult(competitionId: string, athleteId: string, result: RaceResult) {
+  await queueWrite("result:update", `competitions/${competitionId}/results`, resultDocumentId(result), {
+    competitionId,
+    athleteId,
+    raceNumber: result.raceNumber,
+    result: sanitizeQueuePayload(result),
+  });
+}
+
+export async function queueNotification(notification: RaceNotification) {
+  await queueWrite(
+    "notification:update",
+    `competitions/${notification.competitionId}/notifications`,
+    notification.id,
+    sanitizeQueuePayload(notification),
+  );
+}
+
+export async function getPendingChanges() {
+  return getQueuedWrites();
+}
+
+export async function clearPendingChanges() {
+  await clearFirebaseSyncQueue();
+}
+
+async function writeQueueItem(item: QueuedWrite) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase is not initialized.");
-  const { db } = client;
-
-  await setDoc(doc(db, "competitions", competition.id), cleanForFirestore({
-    ...competition,
-    athletes: [],
-    races: [],
-    notifications: [],
-  }));
-
-  await Promise.all([
-    ...competition.athletes.map((athlete) =>
-      setDoc(doc(collection(db, "competitions", competition.id, "athletes"), athlete.id), cleanForFirestore(athlete)),
-    ),
-    ...competition.races.map((race) =>
-      setDoc(doc(collection(db, "competitions", competition.id, "races"), String(race.raceNumber)), cleanForFirestore(race)),
-    ),
-    ...competition.athletes.flatMap((athlete) =>
-      Object.values(athlete.results ?? {}).map((result) =>
-        setDoc(doc(collection(db, "competitions", competition.id, "results"), resultDocumentId(result)), cleanForFirestore(result)),
-      ),
-    ),
-    ...(competition.notifications ?? []).map((notification) =>
-      setDoc(doc(collection(db, "competitions", competition.id, "notifications"), notification.id), cleanForFirestore(notification)),
-    ),
-  ]);
-}
-
-async function writeQueueItem(item: SyncQueueItem) {
-  const client = getFirebaseClient();
-  if (!client) throw new Error("Firebase is not initialized.");
-  const { db } = client;
-
-  if (item.type === "competition") {
-    await writeCompetition(item.competition);
-    return;
-  }
-
-  if (item.type === "athlete") {
-    await setDoc(
-      doc(collection(db, "competitions", item.competitionId, "athletes"), item.athlete.id),
-      cleanForFirestore(item.athlete),
-    );
-    return;
-  }
-
-  if (item.type === "race") {
-    await setDoc(
-      doc(collection(db, "competitions", item.competitionId, "races"), String(item.race.raceNumber)),
-      cleanForFirestore(item.race),
-    );
-    return;
-  }
 
   await setDoc(
-    doc(collection(db, "competitions", item.competitionId, "results"), resultDocumentId(item.result)),
-    cleanForFirestore(item.result),
+    doc(collection(client.db, item.path), item.documentId),
+    cleanForFirestore(item.payload),
+    { merge: true },
   );
 }
 
 export async function syncPendingChanges() {
-  if (!isBrowser() || !window.navigator.onLine) return { synced: 0, pending: readQueue().length };
+  if (!isBrowser() || !window.navigator.onLine) {
+    return { synced: 0, pending: (await getQueuedWrites()).length };
+  }
 
-  const queue = readQueue();
-  const remaining: SyncQueueItem[] = [];
+  const queue = await getQueuedWrites();
   let synced = 0;
 
   for (const item of queue) {
     try {
       await writeQueueItem(item);
+      await removeQueuedWrite(item.id);
       synced += 1;
     } catch (error) {
       console.error("Unable to synchronize with Firebase.", error);
-      remaining.push(item);
+      notifyFirebaseError("Unable to synchronize with Firebase.");
+      return { synced, pending: (await getQueuedWrites()).length };
     }
   }
 
-  writeQueue(remaining);
-  if (remaining.length > 0) notifyFirebaseError("Unable to synchronize with Firebase.");
-  return { synced, pending: remaining.length };
+  return { synced, pending: (await getQueuedWrites()).length };
 }
+
+export { clearFirebaseSyncQueue };
