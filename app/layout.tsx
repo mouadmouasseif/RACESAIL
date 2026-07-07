@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { FirebaseAnalytics } from "@/components/firebase-analytics";
+import { FirebaseStatusBadge } from "@/components/firebase-status";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   <span className="block text-xs font-medium text-muted-foreground">Simple sailing competition management</span>
                 </span>
               </Link>
+              <FirebaseStatusBadge />
             </div>
           </header>
           {children}

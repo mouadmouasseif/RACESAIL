@@ -9,6 +9,7 @@ import { boatClasses, type Competition } from "@/types";
 import { competitionSchema, type CompetitionFormValues } from "@/lib/validations";
 import { createId, fileToDataUrl } from "@/lib/utils";
 import { competitionStore } from "@/services/localStorageService";
+import { syncCompetitionToFirestore } from "@/services/firebaseService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ export function CompetitionForm() {
       updatedAt: new Date().toISOString(),
     };
     competitionStore.create(competition);
+    void syncCompetitionToFirestore(competition);
     router.push(`/competitions/${competition.id}`);
   }
 
