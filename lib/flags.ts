@@ -1,5 +1,6 @@
 const alpha2Map: Record<string, string> = {
   morocco: "MA",
+  mor: "MA",
   maroc: "MA",
   ma: "MA",
   mar: "MA",
@@ -10,6 +11,7 @@ const alpha2Map: Record<string, string> = {
   italie: "IT",
   it: "IT",
   ita: "IT",
+  uea: "AE",
   uae: "AE",
   emirates: "AE",
   "united arab emirates": "AE",
@@ -40,6 +42,7 @@ const alpha2Map: Record<string, string> = {
 
 const alpha3Map: Record<string, string> = {
   morocco: "MAR",
+  mor: "MAR",
   maroc: "MAR",
   ma: "MAR",
   mar: "MAR",
@@ -50,6 +53,7 @@ const alpha3Map: Record<string, string> = {
   italie: "ITA",
   it: "ITA",
   ita: "ITA",
+  uea: "UAE",
   uae: "UAE",
   emirates: "UAE",
   "united arab emirates": "UAE",
@@ -88,6 +92,11 @@ export function getCountryCode(country: string): string {
   return alpha3Map[value] || country.trim().toUpperCase().slice(0, 3);
 }
 
+export function normalizeCountryCode(value?: string) {
+  if (!value) return "";
+  return alpha2Map[normalizeCountry(value)] || value.trim().toUpperCase();
+}
+
 export function getAlpha2Code(country: string): string {
   return alpha2Map[normalizeCountry(country)] || "";
 }
@@ -95,6 +104,12 @@ export function getAlpha2Code(country: string): string {
 export function getFlagImagePath(country: string) {
   const alpha2 = getAlpha2Code(country);
   return alpha2 ? `/flags/${alpha2}.svg` : "/flags/unknown.svg";
+}
+
+export function getFlagUrl(value?: string) {
+  const code = normalizeCountryCode(value);
+  if (!code) return "";
+  return `https://flagcdn.com/w40/${code.slice(0, 2).toLowerCase()}.png`;
 }
 
 export function getFlagEmoji(country: string): string {
