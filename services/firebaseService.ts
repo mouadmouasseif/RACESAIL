@@ -14,7 +14,7 @@ import { getDownloadURL, ref, uploadString } from "firebase/storage";
 import type { Athlete, BoatClass, Competition, Race, RaceNotification, RaceResult, Sex } from "@/types";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
-import { getFirebaseClient, getFirebaseStatus, notifyFirebaseError } from "@/lib/firebase";
+import { getFirebaseClient, getFirebaseStatus, initAnalytics, notifyFirebaseError } from "@/lib/firebase";
 import { queueAthlete, queueCompetition, queueNotification, queueRace, queueResult, syncPendingChanges } from "@/lib/firebaseSync";
 
 export function isFirebaseConfigured() {
@@ -22,17 +22,7 @@ export function isFirebaseConfigured() {
 }
 
 export async function initializeFirebaseAnalytics() {
-  const client = getFirebaseClient();
-  if (!client) return null;
-
-  try {
-    const { getAnalytics, isSupported } = await import("firebase/analytics");
-    if (!(await isSupported())) return null;
-    return getAnalytics(client.app);
-  } catch (error) {
-    console.warn("Firebase Analytics is not available on this device", error);
-    return null;
-  }
+  return initAnalytics();
 }
 
 function cleanForFirestore<T>(value: T): T {

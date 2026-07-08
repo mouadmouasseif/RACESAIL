@@ -1,105 +1,70 @@
 "use client";
 
 import { initializeApp, getApp, getApps, type FirebaseApp, type FirebaseOptions } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  type Firestore,
-  type FirestoreSettings,
-} from "firebase/firestore";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-const developmentFallbackConfig: FirebaseOptions = {
+const fallbackFirebaseConfig: FirebaseOptions = {
   apiKey: "AIzaSyD5FfvUUMBybVKSv29PL27Wnj6vKkSy0iw",
   authDomain: "race-sail.firebaseapp.com",
   projectId: "race-sail",
-  storageBucket: "race-sail.appspot.com",
+  storageBucket: "race-sail.firebasestorage.app",
   messagingSenderId: "625970678316",
   appId: "1:625970678316:web:f4c68325768a77e19a9f89",
   measurementId: "G-Y140YJG9JT",
 };
 
-const requiredEnvKeys = [
-  "NEXT_PUBLIC_FIREBASE_API_KEY",
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  "NEXT_PUBLIC_FIREBASE_APP_ID",
-] as const;
-
-const optionalEnvKeys = [
-  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
-  "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID",
-] as const;
-
 export const firebaseConfig: FirebaseOptions = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || fallbackFirebaseConfig.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || fallbackFirebaseConfig.authDomain,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || fallbackFirebaseConfig.projectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || fallbackFirebaseConfig.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || fallbackFirebaseConfig.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || fallbackFirebaseConfig.appId,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || fallbackFirebaseConfig.measurementId,
 };
 
 type FirebaseClient = {
   app: FirebaseApp;
   db: Firestore;
-  auth: Auth;
   storage: FirebaseStorage;
 };
 
-let client: FirebaseClient | null = null;
-let initializationError: string | null = null;
+let dbInstance: Firestore | undefined;
 
-function envValue(key: string) {
-  return process.env[key];
-}
-
-function hasRequiredConfig(config: FirebaseOptions) {
-  return Boolean(config.apiKey && config.authDomain && config.projectId && config.appId);
-}
-
-function resolvedConfig() {
-  if (hasRequiredConfig(firebaseConfig)) return firebaseConfig;
-  if (process.env.NODE_ENV === "development") return { ...developmentFallbackConfig, ...firebaseConfig };
-  return firebaseConfig;
-}
-
-export function getFirebaseConfigStatus() {
-  const missingRequired = requiredEnvKeys.filter((key) => !envValue(key));
-  const missingOptional = optionalEnvKeys.filter((key) => !envValue(key));
-  const usingDevelopmentFallback = process.env.NODE_ENV === "development" && missingRequired.length > 0;
-
-  if (process.env.NODE_ENV === "development") {
-    console.table({
-      apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
-      authDomain: Boolean(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
-      projectId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
-      appId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
-    });
-  }
-
+function configBooleans() {
   return {
-    valid: missingRequired.length === 0 || usingDevelopmentFallback,
-    syncEnabled: missingRequired.length === 0 || usingDevelopmentFallback,
-    missingRequired,
-    missingOptional,
-    usingDevelopmentFallback,
-    message: missingRequired.length > 0 && !usingDevelopmentFallback
-      ? "Firebase is not configured. Add environment variables in Vercel and redeploy."
-      : "",
-    projectId: resolvedConfig().projectId ?? "",
-    authDomain: resolvedConfig().authDomain ?? "",
-    storageBucket: resolvedConfig().storageBucket ?? "",
+    apiKey: Boolean(firebaseConfig.apiKey),
+    authDomain: Boolean(firebaseConfig.authDomain),
+    projectId: Boolean(firebaseConfig.projectId),
+    appId: Boolean(firebaseConfig.appId),
   };
 }
 
-export function getMissingFirebaseEnv() {
-  return getFirebaseConfigStatus().missingRequired;
+export function getFirebaseConfigStatus() {
+  const status = configBooleans();
+  const missing = Object.entries(status)
+    .filter(([, ready]) => !ready)
+    .map(([key]) => key);
+
+  return {
+    valid: missing.length === 0,
+    syncEnabled: missing.length === 0,
+    missingRequired: missing,
+    missing: missing,
+    missingOptional: [],
+    message: missing.length > 0 ? `Firebase configuration is incomplete: ${missing.join(", ")}` : "",
+    usingDevelopmentFallback: !(
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+      process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    ),
+    projectId: firebaseConfig.projectId ?? "",
+    authDomain: firebaseConfig.authDomain ?? "",
+    storageBucket: firebaseConfig.storageBucket ?? "",
+    firebaseReady: missing.length === 0,
+  };
 }
 
 export function notifyFirebaseError(message = "Unable to synchronize with Firebase.") {
@@ -107,58 +72,36 @@ export function notifyFirebaseError(message = "Unable to synchronize with Fireba
   window.dispatchEvent(new CustomEvent("raceSail:firebase-error", { detail: message }));
 }
 
-export function getFirebaseClient() {
-  if (typeof window === "undefined") return null;
-  if (client) return client;
-
-  const status = getFirebaseConfigStatus();
-  if (!status.valid) {
-    initializationError = status.message;
-    notifyFirebaseError(status.message);
-    return null;
-  }
+function createFirestore(appInstance: FirebaseApp) {
+  if (dbInstance) return dbInstance;
 
   try {
-    const config = resolvedConfig();
-    const app = getApps().length > 0 ? getApp() : initializeApp(config);
-
-    let db: Firestore;
-    try {
-      const firestoreSettings: FirestoreSettings & { useFetchStreams?: boolean } = {
-        experimentalAutoDetectLongPolling: true,
-        useFetchStreams: false,
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-      };
-      db = initializeFirestore(app, firestoreSettings);
-    } catch (error) {
-      console.warn("Firestore long-polling initialization fallback", error);
-      db = getFirestore(app);
-    }
-
-    client = {
-      app,
-      db,
-      auth: getAuth(app),
-      storage: getStorage(app),
-    };
-    initializationError = null;
-    return client;
+    dbInstance = initializeFirestore(appInstance, {
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false,
+    } as Parameters<typeof initializeFirestore>[1] & { useFetchStreams?: boolean });
   } catch (error) {
-    console.error(error);
-    initializationError = "Unable to initialize Firebase.";
-    notifyFirebaseError(initializationError);
-    return null;
+    console.warn("Firestore already initialized or long-polling options unavailable. Falling back to getFirestore().", error);
+    dbInstance = getFirestore(appInstance);
   }
+
+  return dbInstance;
+}
+
+export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+export const db = createFirestore(app);
+export const storage = getStorage(app);
+
+export function getFirebaseClient(): FirebaseClient {
+  return { app, db, storage };
 }
 
 export function getFirebaseStatus() {
   const configStatus = getFirebaseConfigStatus();
   return {
-    initialized: Boolean(client),
-    error: initializationError,
-    missing: configStatus.missingRequired,
+    initialized: true,
+    error: configStatus.message || null,
+    missing: configStatus.missing,
     missingOptional: configStatus.missingOptional,
     syncEnabled: configStatus.syncEnabled,
     message: configStatus.message,
@@ -166,8 +109,27 @@ export function getFirebaseStatus() {
     projectId: configStatus.projectId,
     authDomain: configStatus.authDomain,
     storageBucket: configStatus.storageBucket,
-    currentUser: client?.auth.currentUser?.email ?? client?.auth.currentUser?.uid ?? "Not signed in",
+    currentUser: "Not signed in",
   };
 }
 
-export default getFirebaseClient;
+export async function initAnalytics() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const { getAnalytics, isSupported } = await import("firebase/analytics");
+    if (!(await isSupported())) return null;
+    return getAnalytics(app);
+  } catch (error) {
+    console.warn("Firebase Analytics is not available.", error);
+    return null;
+  }
+}
+
+if (typeof window !== "undefined") {
+  const status = getFirebaseConfigStatus();
+  console.table({
+    ...configBooleans(),
+    firebaseReady: status.firebaseReady,
+  });
+}

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { FirebaseAnalytics } from "@/components/firebase-analytics";
+import { FirebaseAnalytics } from "@/components/FirebaseAnalytics";
 import { FirebaseStatusBadge } from "@/components/firebase-status";
 import "./globals.css";
 

@@ -20,10 +20,15 @@ export function FirebaseStatusBadge() {
 
     async function handleOnline() {
       setOnline(true);
-      const result = await syncPendingChanges();
-      if (!active) return;
-      setPendingCount(result.pending);
-      if (result.synced > 0) setMessage("Firebase synchronized.");
+      try {
+        const result = await syncPendingChanges();
+        if (!active) return;
+        setPendingCount(result.pending);
+        if (result.synced > 0) setMessage("Firebase synchronized.");
+      } catch (error) {
+        console.warn("Unable to synchronize with Firebase.", error);
+        if (active) setMessage("Unable to synchronize with Firebase");
+      }
     }
 
     function handleOffline() {
@@ -39,7 +44,8 @@ export function FirebaseStatusBadge() {
 
     const handleQueueChange = () => void refreshQueue();
 
-    setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+    setOnline(isOnline);
     clearOversizedSyncQueue();
     void migrateOldLocalStorageQueue();
     void refreshQueue();
@@ -49,7 +55,7 @@ export function FirebaseStatusBadge() {
     window.addEventListener("raceSail:sync-queue", handleQueueChange);
     window.addEventListener("raceSail:firebase-error", handleFirebaseError);
 
-    if (navigator.onLine) void handleOnline();
+    if (isOnline) void handleOnline();
 
     return () => {
       active = false;

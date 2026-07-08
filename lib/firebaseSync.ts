@@ -131,13 +131,17 @@ export async function clearPendingChanges() {
 
 async function writeQueueItem(item: QueuedWrite) {
   const client = getFirebaseClient();
-  if (!client) throw new Error("Firebase is not initialized.");
+  if (!client?.db) {
+    console.warn("Firebase is not available. Keeping queued write locally.");
+    return false;
+  }
 
   await setDoc(
     doc(collection(client.db, item.path), item.docId ?? item.documentId ?? item.id),
     cleanForFirestore(item.payload),
     { merge: true },
   );
+  return true;
 }
 
 export async function syncPendingChanges() {
@@ -150,7 +154,8 @@ export async function syncPendingChanges() {
 
   for (const item of queue) {
     try {
-      await writeQueueItem(item);
+      const written = await writeQueueItem(item);
+      if (!written) return { synced, pending: (await getQueuedWrites()).length };
       await removeQueuedWrite(item.id);
       synced += 1;
     } catch (error) {
