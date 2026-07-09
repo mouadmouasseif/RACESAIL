@@ -7,7 +7,7 @@ export const competitionSchema = z.object({
   location: z.string().min(2, "Location is required"),
   date: z.string().min(1, "Date is required"),
   boatClass: z.enum(boatClasses),
-  raceCount: z.coerce.number().int().min(1, "Minimum 1 race").max(9, "Maximum 9 races"),
+  raceCount: z.coerce.number().int().min(1, "Minimum 1 race"),
 });
 
 export const athleteSchema = z.object({
@@ -24,7 +24,7 @@ export const athleteSchema = z.object({
 
 export const raceResultSchema = z
   .object({
-    raceNumber: z.coerce.number().int().min(1).max(9),
+    raceNumber: z.coerce.number().int().min(1),
     sailNumber: z.string().min(1, "Sail number is required"),
     position: z.coerce.number().int().min(1).optional().or(z.literal("").transform(() => undefined)),
     penalty: z.enum(penaltyCodes),

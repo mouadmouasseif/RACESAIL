@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { boatClasses, type BoatClass, type Competition } from "@/types";
-import { createBlankRaces, getFinishedRaceCount, rankAthletes, shouldApplyDiscard } from "@/lib/scoring";
+import { createBlankRaces, getDiscardCount, getFinishedRaceCount, rankAthletes, shouldApplyDiscard } from "@/lib/scoring";
 import { fileToDataUrl } from "@/lib/utils";
 import { competitionStore } from "@/services/localStorageService";
 import { syncCompetitionToFirestore } from "@/services/firebaseService";
@@ -40,7 +40,7 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
   }
 
   function saveCompetitionSettings() {
-    const nextRaceCount = Math.min(9, Math.max(1, Number(raceCount) || 1));
+    const nextRaceCount = Math.max(1, Math.floor(Number(raceCount) || 1));
     if (nextRaceCount < competition.raceCount) {
       const hiddenResults = competition.athletes.some((athlete) =>
         Object.keys(athlete.results).some((raceNumber) => Number(raceNumber) > nextRaceCount),
@@ -111,7 +111,7 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
         </div>
         <div className="grid gap-2">
           <Label>Number of races</Label>
-          <Input type="number" min={1} max={9} value={raceCount} onChange={(event) => setRaceCount(Number(event.target.value))} />
+          <Input type="number" min={1} value={raceCount} onChange={(event) => setRaceCount(Number(event.target.value))} />
         </div>
         <div className="grid gap-2">
           <Label>Club logo</Label>
@@ -123,7 +123,13 @@ export function CompetitionSettings({ competition, onSaved }: { competition: Com
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Badge variant="secondary">Low Point</Badge>
-          {shouldApplyDiscard(getFinishedRaceCount(competition.races)) ? <Badge variant="success">Discard active after R5 finished</Badge> : <Badge variant="secondary">No discard before R5 is finished</Badge>}
+          {shouldApplyDiscard(getFinishedRaceCount(competition.races)) ? (
+            <Badge variant="success">
+              {getDiscardCount(competition.raceCount, getFinishedRaceCount(competition.races))} discard{getDiscardCount(competition.raceCount, getFinishedRaceCount(competition.races)) > 1 ? "s" : ""} active
+            </Badge>
+          ) : (
+            <Badge variant="secondary">No discard before R5 is finished</Badge>
+          )}
         </div>
         <div className="md:col-span-2">
           <Button onClick={saveCompetitionSettings}>Save competition changes</Button>

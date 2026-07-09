@@ -71,10 +71,10 @@ export function CompetitionForm() {
               <SelectContent>{boatClasses.map((boatClass) => <SelectItem key={boatClass} value={boatClass}>{boatClass}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
-          <Field label="Number of races" error={errors.raceCount?.message}><Input type="number" min={1} max={9} {...register("raceCount")} /></Field>
+          <Field label="Number of races" error={errors.raceCount?.message}><Input type="number" min={1} {...register("raceCount")} /></Field>
           <div className="rounded-lg border bg-secondary p-4 md:col-span-2">
             <p className="text-sm font-semibold text-sky-950">Scoring system</p>
-            <p className="text-sm text-sky-800">Low Point system is active by default. Lowest net score wins.</p>
+            <p className="text-sm text-sky-800">Low Point system is active by default. From 10 races, the two worst races are discarded.</p>
           </div>
           <div className="md:col-span-2">
             <Button type="submit" disabled={isSubmitting}><Save className="h-4 w-4" /> Create Competition</Button>

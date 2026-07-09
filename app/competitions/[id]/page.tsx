@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Competition } from "@/types";
+import { getDiscardCount, getFinishedRaceCount } from "@/lib/scoring";
 import { competitionStore } from "@/services/localStorageService";
 import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { CompetitionNav } from "@/components/competition-nav";
@@ -58,7 +59,7 @@ export default function CompetitionDetailPage() {
         <StatCard label="Athletes" value={competition.athletes.length} />
         <StatCard label="Races" value={competition.raceCount} />
         <StatCard label="Boat class" value={competition.boatClass} />
-        <StatCard label="Net scoring" value={competition.raceCount >= 4 ? "Discard on" : "No discard"} />
+        <StatCard label="Net scoring" value={`${getDiscardCount(competition.raceCount, getFinishedRaceCount(competition.races))} discard${getDiscardCount(competition.raceCount, getFinishedRaceCount(competition.races)) > 1 ? "s" : ""}`} />
       </div>
       <div className="mb-6">
         <CompetitionSettings competition={competition} onSaved={setCompetition} />

@@ -5,6 +5,7 @@ import type { Competition } from "@/types";
 import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
 import { isFirebaseConfigured, migrateFirebaseAthlete, subscribeToLiveCompetition } from "@/services/firebaseService";
 import { LiveActions } from "@/components/live-actions";
+import { LiveRace } from "@/components/live-race";
 import { NotificationPanel } from "@/components/notification-panel";
 import { PageShell } from "@/components/page-shell";
 import { ResultsTable } from "@/components/results-table";
@@ -58,7 +59,7 @@ export default function LiveResultsClient({ competitionId, publicMode = false }:
     return <PageShell title="Live Race Sail" description="No live competition data is available yet." />;
   }
 
-  if (!competition.isLivePublished) {
+  if (publicMode && !competition.isLivePublished) {
     return <PageShell title="Live Race Sail" description="This competition is not published yet." />;
   }
 
@@ -70,6 +71,7 @@ export default function LiveResultsClient({ competitionId, publicMode = false }:
     >
       <div className="grid gap-6">
         <NotificationPanel notifications={competition.notifications ?? []} />
+        <LiveRace competition={competition} publicMode={publicMode} onCompetitionSaved={setCompetition} />
         <div className="grid gap-3 md:grid-cols-3">
           {competition.races.slice(0, competition.raceCount).map((race) => (
             <div key={race.raceNumber} className="rounded-lg border bg-white p-3 shadow-sm">

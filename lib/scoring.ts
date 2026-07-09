@@ -1,4 +1,4 @@
-import type { Athlete, PenaltyCode, Race, RaceResult } from "@/types";
+import type { Athlete, PenaltyCode, Race, RacePenaltyCode, RaceResult } from "@/types";
 
 export function raceNumbers(raceCount: number) {
   return Array.from({ length: raceCount }, (_, index) => index + 1);
@@ -20,7 +20,43 @@ export function shouldApplyDiscard(finishedRaceCount: number): boolean {
   return finishedRaceCount >= 5;
 }
 
+export function getDiscardCount(raceCount: number, finishedRaceCount: number): number {
+  if (finishedRaceCount < 5) return 0;
+  return raceCount >= 10 || finishedRaceCount >= 10 ? 2 : 1;
+}
+
 export function scoreRaceResult(result: RaceResult, athleteCount: number): RaceResult {
+  const penaltyCode = (result.penaltyCode ?? (result.penalty === "OK" ? "NONE" : result.penalty)) as RacePenaltyCode;
+  if (penaltyCode && penaltyCode !== "NONE") {
+    const rank = result.rank ?? result.finishPosition ?? result.position ?? 0;
+    const points = penaltyCode === "ZFP"
+      ? Math.round((rank + 0.2 * athleteCount) * 10) / 10
+      : penaltyCode === "SCP"
+        ? Math.round((rank + (result.penaltyPoints ?? 0)) * 10) / 10
+        : penaltyCode === "DPI" || penaltyCode === "RDG"
+          ? Math.round((result.penaltyPoints ?? athleteCount + 1) * 10) / 10
+          : athleteCount + 1;
+
+    return {
+      ...result,
+      penaltyCode,
+      penalty: result.penalty === "OK" ? "DSQ" : result.penalty,
+      points,
+      position: undefined,
+      status: result.status ?? penaltyCode,
+    };
+  }
+
+  if (typeof result.points === "number" && result.points > 0 && result.status === "FIN") {
+    return {
+      ...result,
+      penaltyCode: "NONE",
+      penalty: "OK",
+      points: result.points,
+      position: result.position ?? result.finishPosition ?? result.rank,
+    };
+  }
+
   const points =
     result.penalty !== "OK"
       ? calculatePenaltyPoints(athleteCount)
@@ -42,7 +78,7 @@ export function calculateAthleteScores(
   finishedRaceCount = 0,
 ): Athlete {
   const scoredResults: Record<number, RaceResult> = { ...athlete.results };
-  const scores: number[] = [];
+  const scores: Array<{ raceNumber: number; score: number }> = [];
 
   for (let i = 1; i <= raceCount; i++) {
     const result = athlete.results[i];
@@ -50,11 +86,15 @@ export function calculateAthleteScores(
 
     const scoredResult = scoreRaceResult(result, athleteCount);
     scoredResults[i] = scoredResult;
-    if (scoredResult.points > 0) scores.push(scoredResult.points);
+    if (scoredResult.points > 0) scores.push({ raceNumber: i, score: scoredResult.points });
   }
 
-  const total = scores.reduce((sum, score) => sum + score, 0);
-  const discard = shouldApplyDiscard(finishedRaceCount) && scores.length > 0 ? Math.max(...scores) : 0;
+  const total = scores.reduce((sum, item) => sum + item.score, 0);
+  const discardCount = Math.min(getDiscardCount(raceCount, finishedRaceCount), scores.length);
+  const discard = [...scores]
+    .sort((a, b) => b.score - a.score || b.raceNumber - a.raceNumber)
+    .slice(0, discardCount)
+    .reduce((sum, item) => sum + item.score, 0);
   const net = total - discard;
 
   return {
@@ -115,17 +155,22 @@ export function applyRaceResultToAthletes(athletes: Athlete[], raceResult: RaceR
 
 export function formatRaceCell(result: RaceResult | undefined, isDiscarded: boolean) {
   if (!result) return "-";
-  const value = result.penalty !== "OK" ? `${result.penalty} ${result.points}` : String(result.points || result.position || "-");
+  const code = result.penaltyCode && result.penaltyCode !== "NONE" ? result.penaltyCode : result.penalty;
+  const value = code !== "OK" ? `${code} ${result.points}` : String(result.points || result.position || result.finishPosition || "-");
   return isDiscarded ? `(${value})` : value;
 }
 
 export function getDiscardedRaceNumbers(athlete: Athlete, raceCount: number) {
   if (!athlete.discard) return new Set<number>();
-  for (let raceNumber = 1; raceNumber <= raceCount; raceNumber++) {
-    const result = athlete.results[raceNumber];
-    if (result && result.points === athlete.discard) return new Set([raceNumber]);
-  }
-  return new Set<number>();
+  const discardCount = raceCount >= 10 ? 2 : 1;
+  return new Set(
+    Array.from({ length: raceCount }, (_, index) => index + 1)
+      .map((raceNumber) => ({ raceNumber, points: athlete.results[raceNumber]?.points ?? 0 }))
+      .filter((item) => item.points > 0)
+      .sort((a, b) => b.points - a.points || b.raceNumber - a.raceNumber)
+      .slice(0, discardCount)
+      .map((item) => item.raceNumber),
+  );
 }
 
 export function makeRaceResult(input: {

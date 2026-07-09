@@ -173,6 +173,12 @@ export async function syncCompetitionToFirestore(competition: Competition) {
         createdAt: competition.createdAt,
       }, { merge: true });
     }
+    if ((competition.publicAccessEnabled || competition.isLivePublished) && (competition.competitionCode || competition.publicCode)) {
+      await setDoc(doc(db, "liveCodes", String(competition.competitionCode || competition.publicCode).trim().toUpperCase()), {
+        competitionId: competition.id,
+        createdAt: competition.createdAt,
+      }, { merge: true });
+    }
 
     await Promise.all([
       ...competition.athletes.map(async (athlete) =>
@@ -303,6 +309,10 @@ export async function getCompetitionFromFirestore(competitionId: string): Promis
       id: competitionId,
       name: competitionData.name ?? "Live Competition",
       publicCode: competitionData.publicCode ?? "",
+      competitionCode: competitionData.competitionCode ?? competitionData.publicCode ?? "",
+      publicAccessEnabled: competitionData.publicAccessEnabled ?? competitionData.isLivePublished ?? false,
+      allowedRoles: competitionData.allowedRoles ?? ["coach", "athlete"],
+      originalCompetitionId: competitionData.originalCompetitionId,
       isLivePublished: competitionData.isLivePublished ?? false,
       clubName: competitionData.clubName ?? "",
       clubLogo: competitionData.clubLogo,

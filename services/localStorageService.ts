@@ -105,7 +105,7 @@ function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string,
 }
 
 function normalizeCompetition(competition: Partial<Competition> & { status?: string }): Competition {
-  const raceCount = Math.min(9, Math.max(1, Number(competition.raceCount) || 1));
+  const raceCount = Math.max(1, Number(competition.raceCount) || 1);
   const rawAthletes = competition.athletes ?? [];
   const normalizedAthletes = rawAthletes.map((athlete) => normalizeAthlete(athlete, rawAthletes.length));
   const raceResults = normalizedAthletes.flatMap((athlete) => Object.values(athlete.results));
@@ -118,6 +118,10 @@ function normalizeCompetition(competition: Partial<Competition> & { status?: str
   return {
     id: competition.id ?? createSafeId("competition"),
     publicCode: competition.publicCode ?? generateCompetitionCode(),
+    competitionCode: competition.competitionCode ?? competition.publicCode ?? generateCompetitionCode(),
+    publicAccessEnabled: competition.publicAccessEnabled ?? competition.isLivePublished ?? false,
+    allowedRoles: competition.allowedRoles ?? ["coach", "athlete"],
+    originalCompetitionId: competition.originalCompetitionId,
     isLivePublished: competition.isLivePublished ?? false,
     name: competition.name ?? "Untitled Competition",
     clubName: competition.clubName ?? "",

@@ -2,7 +2,7 @@
 
 import type { Competition, RaceResult } from "@/types";
 import type jsPDF from "jspdf";
-import { formatRaceCell, getDiscardedRaceNumbers, getFinishedRaceCount, raceNumbers, rankedAthletes } from "@/lib/scoring";
+import { formatRaceCell, getDiscardCount, getDiscardedRaceNumbers, getFinishedRaceCount, raceNumbers, rankedAthletes } from "@/lib/scoring";
 import { getCountryCode, getFlagUrl } from "@/lib/flags";
 
 const APP_LOGO_BASE64 =
@@ -61,7 +61,7 @@ export async function downloadPdf(competition: Competition) {
   const races = raceNumbers(competition.raceCount);
   const finishedRaceCount = getFinishedRaceCount(competition.races);
   const rows = rankedAthletes(competition.athletes, competition.raceCount, finishedRaceCount);
-  const discards = finishedRaceCount >= 5 ? 1 : 0;
+  const discards = getDiscardCount(competition.raceCount, finishedRaceCount);
   const toCount = Math.max(0, competition.raceCount - discards);
   const pageWidth = doc.internal.pageSize.getWidth();
   const [raceSailLogo, federationLogo, clubLogo, competitionLogo] = await Promise.all([
