@@ -12,5 +12,5 @@ export function sailNumberMatches(input: string, target: string): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
 
-  return b.endsWith(a) || a.endsWith(b);
+  return b.endsWith(a);
 }
