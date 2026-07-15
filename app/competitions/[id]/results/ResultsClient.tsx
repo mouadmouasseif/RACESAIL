@@ -5,6 +5,7 @@ import type { Competition } from "@/types";
 import { competitionStore } from "@/services/localStorageService";
 import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { CompetitionNav } from "@/components/competition-nav";
+import { CategoryPodiums } from "@/components/category-podiums";
 import { PageShell } from "@/components/page-shell";
 import { RaceManagement } from "@/components/race-management";
 import { ResultsTable } from "@/components/results-table";
@@ -50,6 +51,7 @@ export default function ResultsClient({ competitionId }: { competitionId: string
       <div className="grid gap-6">
         <RaceManagement competition={competition} onSaved={setCompetition} />
         <ResultsTable competition={competition} />
+        <CategoryPodiums competition={competition} />
       </div>
     </PageShell>
   );

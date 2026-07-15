@@ -8,6 +8,7 @@ import { competitionStore } from "@/services/localStorageService";
 import { getCompetitionFromFirestore } from "@/services/firebaseService";
 import { CompetitionNav } from "@/components/competition-nav";
 import { CompetitionSettings } from "@/components/competition-settings";
+import { CategoryPodiums } from "@/components/category-podiums";
 import { LivePublishControls } from "@/components/live-publish-controls";
 import { LogoImage } from "@/components/logo-image";
 import { PageShell } from "@/components/page-shell";
@@ -75,6 +76,9 @@ export default function CompetitionDetailPage() {
         </CardContent>
       </Card>
       <ResultsTable competition={competition} />
+      <div className="mt-6">
+        <CategoryPodiums competition={competition} />
+      </div>
     </PageShell>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { BookOpen, LogIn } from "lucide-react";
 import { FirebaseAnalytics } from "@/components/FirebaseAnalytics";
 import { FirebaseStatusBadge } from "@/components/firebase-status";
 import "./globals.css";
@@ -29,7 +30,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         <FirebaseAnalytics />
         <div className="min-h-screen">
           <header className="sticky top-0 z-40 border-b bg-white/85 backdrop-blur">
@@ -41,7 +42,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   <span className="block text-xs font-medium text-muted-foreground">Simple sailing competition management</span>
                 </span>
               </Link>
-              <FirebaseStatusBadge />
+              <div className="flex items-center gap-2">
+                <Link href="/join" className="hidden items-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex">
+                  <LogIn className="h-4 w-4" />
+                  Join
+                </Link>
+                <Link href="/guide" className="hidden items-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex">
+                  <BookOpen className="h-4 w-4" />
+                  Guide
+                </Link>
+                <FirebaseStatusBadge />
+              </div>
             </div>
           </header>
           {children}

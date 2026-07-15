@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Competition, RaceLiveState, StartCountdownMode } from "@/types";
 import { countdownSecondsForMode, updateLiveRaceState } from "@/lib/raceLive";
 import { getClassFlagCode } from "@/lib/sailingFlags";
@@ -13,6 +13,7 @@ type LiveStartTimerProps = {
   competition: Competition;
   liveState?: RaceLiveState;
   readOnly?: boolean;
+  onStateChange?: (state: RaceLiveState) => void;
 };
 
 function formatCountdown(seconds: number) {
@@ -28,12 +29,19 @@ function remainingSeconds(liveState?: RaceLiveState) {
   return Math.max(0, liveState.countdownSeconds - elapsed);
 }
 
-export function LiveStartTimer({ competition, liveState, readOnly = false }: LiveStartTimerProps) {
+export function LiveStartTimer({ competition, liveState, readOnly = false, onStateChange }: LiveStartTimerProps) {
   const [mode, setMode] = useState<StartCountdownMode>(liveState?.countdownMode ?? "5min");
   const [preparatoryFlag, setPreparatoryFlag] = useState(liveState?.selectedFlagCode ?? "P");
   const [, setNow] = useState(Date.now());
   const secondsLeft = remainingSeconds(liveState);
   const classFlag = getClassFlagCode(competition.boatClass);
+
+  const commitState = useCallback(async (patch: Partial<RaceLiveState>) => {
+    if (!liveState) return undefined;
+    const updated = await updateLiveRaceState(competition.id, liveState.raceId, patch);
+    onStateChange?.(updated);
+    return updated;
+  }, [competition.id, liveState, onStateChange]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -42,12 +50,12 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
 
   useEffect(() => {
     if (!liveState || liveState.status !== "countdown" || secondsLeft > 0) return;
-    void updateLiveRaceState(competition.id, liveState.raceId, {
+    void commitState({
       status: "started",
       officialStartAt: liveState.officialStartAt ?? Date.now(),
       activeFlags: ["Orange"],
     });
-  }, [competition.id, liveState, secondsLeft]);
+  }, [commitState, liveState, secondsLeft]);
 
   const visibleFlags = useMemo(() => {
     if (!liveState) return [classFlag, "Orange"];
@@ -60,7 +68,7 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
   async function prepareStart() {
     if (!liveState) return;
     const countdownSeconds = countdownSecondsForMode(mode);
-    await updateLiveRaceState(competition.id, liveState.raceId, {
+    await commitState({
       status: "not_started",
       countdownMode: mode,
       countdownSeconds,
@@ -78,7 +86,7 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
       await directStart();
       return;
     }
-    await updateLiveRaceState(competition.id, liveState.raceId, {
+    await commitState({
       status: "countdown",
       countdownMode: mode,
       countdownSeconds,
@@ -90,7 +98,7 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
 
   async function directStart() {
     if (!liveState) return;
-    await updateLiveRaceState(competition.id, liveState.raceId, {
+    await commitState({
       status: "started",
       countdownMode: "direct",
       countdownSeconds: 0,
@@ -102,7 +110,7 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
 
   async function cancelStart() {
     if (!liveState) return;
-    await updateLiveRaceState(competition.id, liveState.raceId, {
+    await commitState({
       status: "cancelled",
       countdownStartedAt: undefined,
       activeFlags: ["AP", "Orange"],
@@ -114,7 +122,7 @@ export function LiveStartTimer({ competition, liveState, readOnly = false }: Liv
     const activeFlags = liveState.activeFlags.includes(flag)
       ? liveState.activeFlags.filter((item) => item !== flag)
       : [...liveState.activeFlags, flag];
-    await updateLiveRaceState(competition.id, liveState.raceId, { activeFlags });
+    await commitState({ activeFlags });
   }
 
   return (

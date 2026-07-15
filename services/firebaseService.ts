@@ -16,9 +16,22 @@ import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 import { getFinishedRaceCount, rankAthletes } from "@/lib/scoring";
 import { getFirebaseClient, getFirebaseStatus, initAnalytics, notifyFirebaseError } from "@/lib/firebase";
 import { queueAthlete, queueCompetition, queueNotification, queueRace, queueResult, syncPendingChanges } from "@/lib/firebaseSync";
+import { getCompetitions } from "@/services/localStorageService";
 
 export function isFirebaseConfigured() {
   return getFirebaseStatus().missing.length === 0;
+}
+
+function isBrowserOffline() {
+  return typeof window !== "undefined" && !window.navigator.onLine;
+}
+
+function isOfflineError(error: unknown) {
+  return error instanceof Error && (
+    error.message.toLowerCase().includes("client is offline") ||
+    error.message.toLowerCase().includes("offline") ||
+    error.message.toLowerCase().includes("unavailable")
+  );
 }
 
 export async function initializeFirebaseAnalytics() {
@@ -251,15 +264,27 @@ export async function unpublishCompetitionLive(competition: Competition) {
 }
 
 export async function getCompetitionIdByPublicCode(publicCode: string) {
+  const normalizedCode = publicCode.trim().toUpperCase();
+  const localCompetition = getCompetitions().find((competition) =>
+    [competition.publicCode, competition.competitionCode].filter(Boolean).some((code) => String(code).trim().toUpperCase() === normalizedCode),
+  );
+  if (localCompetition) return localCompetition.id;
+
+  if (isBrowserOffline()) return undefined;
+
   const client = getFirebaseClient();
   if (!client) return undefined;
 
   try {
-    const snapshot = await getDoc(doc(client.db, "liveCodes", publicCode.trim().toUpperCase()));
+    const snapshot = await getDoc(doc(client.db, "liveCodes", normalizedCode));
     if (!snapshot.exists()) return undefined;
     const data = snapshot.data() as { competitionId?: string };
     return data.competitionId;
   } catch (error) {
+    if (isOfflineError(error)) {
+      console.warn("Firebase offline while loading live code. Local data kept.");
+      return undefined;
+    }
     console.error("Unable to load live code.", error);
     notifyFirebaseError("Unable to synchronize with Firebase.");
     return undefined;
@@ -274,6 +299,7 @@ export async function syncCompetitionsToFirestore(competitions: Competition[]) {
 
 export async function getCompetitionFromFirestore(competitionId: string): Promise<Competition | undefined> {
   if (typeof window === "undefined") return undefined;
+  if (isBrowserOffline()) return undefined;
 
   const client = getFirebaseClient();
   if (!client) return undefined;
@@ -336,6 +362,10 @@ export async function getCompetitionFromFirestore(competitionId: string): Promis
       athletes: rankAthletes(athletes, raceCount, getFinishedRaceCount(competition.races)),
     };
   } catch (error) {
+    if (isOfflineError(error)) {
+      console.warn("Firebase offline while loading competition. Local data kept.");
+      return undefined;
+    }
     console.error("Unable to load Firebase competition.", error);
     notifyFirebaseError("Unable to synchronize with Firebase.");
     return undefined;
@@ -391,6 +421,10 @@ export async function subscribeToLiveCompetition(
 
     const emit = () => onChange({ ...state });
     const onError = (error: Error) => {
+      if (isOfflineError(error)) {
+        console.warn("Firebase offline. Live data will continue from local data when available.");
+        return;
+      }
       console.error("Unable to synchronize with Firebase.", error);
       notifyFirebaseError("Unable to synchronize with Firebase.");
     };

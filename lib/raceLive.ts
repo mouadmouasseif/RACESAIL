@@ -321,7 +321,7 @@ export async function subscribeLiveRaceData(
 
     const unsubscribers = [
       onSnapshot(doc(db, livePath(competitionId, raceId)), (snapshot) => {
-        state.state = snapshot.exists() ? snapshot.data() as RaceLiveState : undefined;
+        state.state = snapshot.exists() ? snapshot.data() as RaceLiveState : readLocalLiveData(competitionId, raceId).state;
         emit();
       }, onError),
       onSnapshot(collection(db, `${livePath(competitionId, raceId)}/marks`), (snapshot) => {

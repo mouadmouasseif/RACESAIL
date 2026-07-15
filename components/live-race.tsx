@@ -69,6 +69,10 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
   const activeFlags = liveState?.activeFlags?.length ? liveState.activeFlags : [];
   const displayImage = liveState?.courseAreaImageUrl || courseImageUrl || "/images/pavillons-depart.jpg";
 
+  function updateLocalLiveState(state: NonNullable<LiveRaceData["state"]>) {
+    setLiveData((current) => ({ ...current, state }));
+  }
+
   async function saveCourseImage() {
     if (!liveState) return;
     await updateLiveRaceState(competition.id, raceId, { courseAreaImageUrl: courseImageUrl.trim() || undefined });
@@ -170,7 +174,7 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
         ) : null}
       </section>
 
-      <LiveStartTimer competition={competition} liveState={liveState} readOnly={publicMode} />
+      <LiveStartTimer competition={competition} liveState={liveState} readOnly={publicMode} onStateChange={updateLocalLiveState} />
       <LiveRaceTable competition={competition} raceId={raceId} liveState={liveState} liveData={liveData} readOnly={publicMode} onCompetitionSaved={onCompetitionSaved} />
       {!publicMode ? <ProtestForm competitionId={competition.id} raceId={raceId} /> : null}
 
