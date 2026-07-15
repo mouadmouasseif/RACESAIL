@@ -5,8 +5,7 @@ import type { Competition, MarkType, RaceLiveState } from "@/types";
 import { addAutomaticFinish, setRacePenalty } from "@/lib/raceResultsAuto";
 import { formatRaceTime, markBoatStarted, markUFD, recordMark, type LiveRaceData } from "@/lib/raceLive";
 import { findAthleteBySailNumber } from "@/lib/raceResultsAuto";
-import { competitionStore } from "@/services/localStorageService";
-import { syncCompetitionToFirestore } from "@/services/firebaseService";
+import { sailNumberMatches } from "@/lib/sailNumber";
 import { FlagIcon } from "@/components/flag-icon";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +35,12 @@ function statusVariant(status?: string) {
 export function LiveRaceTable({ competition, raceId, liveState, liveData, readOnly = false, onAction, onCompetitionSaved }: LiveRaceTableProps) {
   const [sailNumber, setSailNumber] = useState("");
   const [note, setNote] = useState("");
+  const [message, setMessage] = useState("");
   const baseStart = liveState?.officialStartAt ?? liveState?.firstBoatStartedAt;
+
+  function persistCompetition(next: Competition) {
+    onCompetitionSaved?.(next);
+  }
 
   const rows = useMemo(() => {
     const startItems = liveData.startList.length > 0
@@ -54,13 +58,13 @@ export function LiveRaceTable({ competition, raceId, liveState, liveData, readOn
       }));
 
     return startItems.map((item) => {
-      const athlete = competition.athletes.find((entry) => entry.sailNumber === item.sailNumber);
-      const windward = liveData.marks.find((mark) => mark.sailNumber === item.sailNumber && mark.markType === "windward_mark");
-      const leeward = liveData.marks.find((mark) => mark.sailNumber === item.sailNumber && mark.markType === "leeward_mark");
-      const finish = liveData.marks.find((mark) => mark.sailNumber === item.sailNumber && mark.markType === "finish");
-      const ufd = liveData.ufd.find((entry) => entry.sailNumber === item.sailNumber);
+      const athlete = competition.athletes.find((entry) => sailNumberMatches(item.sailNumber, entry.sailNumber));
+      const windward = liveData.marks.find((mark) => sailNumberMatches(item.sailNumber, mark.sailNumber) && mark.markType === "windward_mark");
+      const leeward = liveData.marks.find((mark) => sailNumberMatches(item.sailNumber, mark.sailNumber) && mark.markType === "leeward_mark");
+      const finish = liveData.marks.find((mark) => sailNumberMatches(item.sailNumber, mark.sailNumber) && mark.markType === "finish");
+      const ufd = liveData.ufd.find((entry) => sailNumberMatches(item.sailNumber, entry.sailNumber));
       const protests = liveData.protests.filter((protest) =>
-        protest.protesterSailNumber === item.sailNumber || protest.protestedSailNumber === item.sailNumber,
+        sailNumberMatches(item.sailNumber, protest.protesterSailNumber) || sailNumberMatches(item.sailNumber, protest.protestedSailNumber),
       );
       return {
         ...item,
@@ -90,29 +94,43 @@ export function LiveRaceTable({ competition, raceId, liveState, liveData, readOn
   async function runAction(markType: MarkType | "start" | "ufd", rowSailNumber?: string) {
     const target = (rowSailNumber ?? sailNumber).trim();
     if (!target) return;
+    setMessage("");
+
+    const athlete = findAthleteBySailNumber(competition, target);
+    const resolvedSailNumber = athlete?.sailNumber ?? target;
+
+    if (!athlete) {
+      setMessage("Sail number not found in this class.");
+      return;
+    }
+
+    if ((markType === "finish" || markType === "windward_mark" || markType === "leeward_mark") && !liveState?.officialStartAt && !liveState?.firstBoatStartedAt) {
+      setMessage("Open or start the race before recording marks.");
+      return;
+    }
+
+    if (markType === "finish" && liveData.marks.some((mark) => mark.markType === "finish" && sailNumberMatches(resolvedSailNumber, mark.sailNumber))) {
+      setMessage(`${resolvedSailNumber} is already finished.`);
+      return;
+    }
 
     if (markType === "start") {
-      await markBoatStarted({ competitionId: competition.id, raceId, sailNumber: target });
+      await markBoatStarted({ competitionId: competition.id, raceId, sailNumber: resolvedSailNumber });
     } else if (markType === "ufd") {
-      const athlete = findAthleteBySailNumber(competition, target);
-      await markUFD({ competitionId: competition.id, raceId, sailNumber: athlete?.sailNumber ?? target, note });
+      await markUFD({ competitionId: competition.id, raceId, sailNumber: resolvedSailNumber, note });
       if (athlete && liveState) {
-        const updated = competitionStore.create(setRacePenalty(competition, liveState.raceNumber, athlete.sailNumber, "UFD", undefined, note));
-        onCompetitionSaved?.(updated);
-        void syncCompetitionToFirestore(updated);
+        persistCompetition(setRacePenalty(competition, liveState.raceNumber, athlete.sailNumber, "UFD", undefined, note));
       }
     } else {
-      const athlete = findAthleteBySailNumber(competition, target);
-      await recordMark({ competitionId: competition.id, raceId, sailNumber: athlete?.sailNumber ?? target, markType });
+      await recordMark({ competitionId: competition.id, raceId, sailNumber: resolvedSailNumber, markType });
       if (markType === "finish" && athlete && liveState) {
-        const updated = competitionStore.create(addAutomaticFinish(competition, liveState.raceNumber, athlete.sailNumber));
-        onCompetitionSaved?.(updated);
-        void syncCompetitionToFirestore(updated);
+        persistCompetition(addAutomaticFinish(competition, liveState.raceNumber, athlete.sailNumber));
       }
     }
 
     setSailNumber("");
     setNote("");
+    setMessage(markType === "finish" ? `${resolvedSailNumber} finished.` : `${resolvedSailNumber} saved.`);
     onAction?.();
   }
 
@@ -131,7 +149,18 @@ export function LiveRaceTable({ competition, raceId, liveState, liveData, readOn
         {!readOnly ? (
           <div className="grid gap-2 md:min-w-[520px]">
             <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
-              <Input value={sailNumber} onChange={(event) => setSailNumber(event.target.value)} placeholder="Sail Number" className="text-base" />
+              <Input
+                value={sailNumber}
+                onChange={(event) => setSailNumber(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void runAction("finish");
+                  if (event.key === "Escape") setSailNumber("");
+                }}
+                placeholder="Sail Number"
+                className="text-base"
+                inputMode="text"
+                autoComplete="off"
+              />
               <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="UFD / protest note" />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -141,6 +170,7 @@ export function LiveRaceTable({ competition, raceId, liveState, liveData, readOn
               <Button size="sm" onClick={() => runAction("finish")}>Finish</Button>
               <Button size="sm" variant="destructive" onClick={() => runAction("ufd")}>UFD</Button>
             </div>
+            {message ? <p className="text-sm font-semibold text-slate-700">{message}</p> : null}
           </div>
         ) : null}
       </div>

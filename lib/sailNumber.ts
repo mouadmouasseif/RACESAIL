@@ -12,5 +12,8 @@ export function sailNumberMatches(input: string, target: string): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
 
-  return b.endsWith(a);
+  const numericA = a.match(/\d+$/)?.[0] ?? "";
+  const numericB = b.match(/\d+$/)?.[0] ?? "";
+
+  return numericA.length >= 3 && numericA === numericB;
 }

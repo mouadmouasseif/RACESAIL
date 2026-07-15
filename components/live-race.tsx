@@ -21,6 +21,7 @@ import { LiveRaceTable } from "@/components/LiveRaceTable";
 import { LiveStartTimer } from "@/components/LiveStartTimer";
 import { ProtestForm } from "@/components/ProtestForm";
 import { SailingFlag } from "@/components/SailingFlag";
+import { filterAthletesByBoatClass, getCompetitionBoatClasses, toBoatClassName } from "@/lib/boatClassHelpers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -35,19 +36,47 @@ const emptyLiveData: LiveRaceData = {
 
 export function LiveRace({ competition, publicMode = false, onCompetitionSaved }: { competition: Competition; publicMode?: boolean; onCompetitionSaved?: (competition: Competition) => void }) {
   const [raceNumber, setRaceNumber] = useState(1);
+  const boatClassOptions = useMemo(() => getCompetitionBoatClasses(competition), [competition]);
+  const [selectedBoatClassId, setSelectedBoatClassId] = useState(() => boatClassOptions[0]?.id ?? "");
   const [liveData, setLiveData] = useState<LiveRaceData>(emptyLiveData);
   const [courseImageUrl, setCourseImageUrl] = useState("");
   const [imageHidden, setImageHidden] = useState(false);
-  const raceId = useMemo(() => liveRaceId(competition.id, raceNumber), [competition.id, raceNumber]);
+  const selectedBoatClass = boatClassOptions.find((item) => item.id === selectedBoatClassId) ?? boatClassOptions[0];
+  const classAthletes = useMemo(
+    () => selectedBoatClass ? filterAthletesByBoatClass(competition.athletes, selectedBoatClass.id) : competition.athletes,
+    [competition.athletes, selectedBoatClass],
+  );
+  const scopedCompetition = useMemo(() => ({
+    ...competition,
+    boatClass: toBoatClassName(selectedBoatClass?.name ?? competition.boatClass),
+    athletes: classAthletes,
+  }), [classAthletes, competition, selectedBoatClass]);
+  const raceId = useMemo(() => liveRaceId(competition.id, raceNumber, selectedBoatClass?.id), [competition.id, raceNumber, selectedBoatClass]);
   const liveState = liveData.state;
+
+  useEffect(() => {
+    if (!boatClassOptions.length) return;
+    if (!selectedBoatClassId || !boatClassOptions.some((item) => item.id === selectedBoatClassId)) {
+      setSelectedBoatClassId(boatClassOptions[0].id);
+    }
+  }, [boatClassOptions, selectedBoatClassId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const classFromUrl = new URLSearchParams(window.location.search).get("class");
+    if (classFromUrl && boatClassOptions.some((item) => item.id === classFromUrl)) {
+      setSelectedBoatClassId(classFromUrl);
+    }
+  }, [boatClassOptions]);
 
   useEffect(() => {
     let active = true;
     let unsubscribe: (() => void) | undefined;
 
     async function setupLiveRace() {
+      if (!selectedBoatClass) return;
       if (!publicMode) {
-        const prepared = await ensureLiveRace(competition, raceNumber);
+        const prepared = await ensureLiveRace(competition, raceNumber, selectedBoatClass.id);
         if (active) setLiveData(prepared);
       }
 
@@ -64,13 +93,35 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
       active = false;
       unsubscribe?.();
     };
-  }, [competition, publicMode, raceId, raceNumber]);
+  }, [competition, publicMode, raceId, raceNumber, selectedBoatClass]);
 
   const activeFlags = liveState?.activeFlags?.length ? liveState.activeFlags : [];
   const displayImage = liveState?.courseAreaImageUrl || courseImageUrl || "/images/pavillons-depart.jpg";
 
   function updateLocalLiveState(state: NonNullable<LiveRaceData["state"]>) {
     setLiveData((current) => ({ ...current, state }));
+  }
+
+  function mergeScopedCompetition(nextScopedCompetition: Competition) {
+    const scopedAthleteIds = new Set(nextScopedCompetition.athletes.map((athlete) => athlete.id));
+    const mergedAthletes = competition.athletes.map((athlete) => (
+      scopedAthleteIds.has(athlete.id)
+        ? nextScopedCompetition.athletes.find((item) => item.id === athlete.id) ?? athlete
+        : athlete
+    ));
+    return {
+      ...competition,
+      athletes: mergedAthletes,
+      races: nextScopedCompetition.races,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function saveScoped(nextScopedCompetition: Competition) {
+    const updated = competitionStore.create(mergeScopedCompetition(nextScopedCompetition));
+    onCompetitionSaved?.(updated);
+    void syncCompetitionToFirestore(updated);
+    return updated;
   }
 
   async function saveCourseImage() {
@@ -80,32 +131,31 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
 
   async function markFinished() {
     if (!liveState) return;
-    const updated = competitionStore.create(finishRaceWithDnc(competition, raceNumber));
-    onCompetitionSaved?.(updated);
-    void syncCompetitionToFirestore(updated);
+    if (!window.confirm(`Finish ${selectedBoatClass?.name ?? "class"} race ${raceNumber}? Missing boats will become DNC.`)) return;
+    saveScoped(finishRaceWithDnc(scopedCompetition, raceNumber));
     await updateLiveRaceState(competition.id, raceId, { status: "finished" });
   }
 
   async function reopenRace() {
     if (!liveState) return;
-    const updated = competitionStore.create(openRace(competition, raceNumber));
-    onCompetitionSaved?.(updated);
-    void syncCompetitionToFirestore(updated);
+    saveScoped(openRace(scopedCompetition, raceNumber));
     await updateLiveRaceState(competition.id, raceId, { status: "open" });
   }
 
   async function openLiveRace() {
     if (!liveState) return;
-    const updated = competitionStore.create(openRace(competition, raceNumber));
-    onCompetitionSaved?.(updated);
-    void syncCompetitionToFirestore(updated);
+    saveScoped(openRace(scopedCompetition, raceNumber));
     await updateLiveRaceState(competition.id, raceId, { status: "open", activeFlags: liveState.activeFlags });
   }
 
   async function recalculateRace() {
-    const updated = competitionStore.create(recalculateRaceResults(competition, raceNumber));
-    onCompetitionSaved?.(updated);
-    void syncCompetitionToFirestore(updated);
+    saveScoped(recalculateRaceResults(scopedCompetition, raceNumber));
+  }
+
+  async function copyPublicClassLink() {
+    if (!selectedBoatClass || typeof navigator === "undefined") return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://racesail.vercel.app";
+    await navigator.clipboard.writeText(`${origin}/live/${competition.id}?class=${encodeURIComponent(selectedBoatClass.id)}`);
   }
 
   return (
@@ -116,13 +166,22 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-black text-slate-950">Live Race</h2>
               <Badge variant={liveState?.status === "started" ? "success" : "secondary"}>{liveState?.status ?? "waiting"}</Badge>
+              {selectedBoatClass ? <Badge variant="gold">{selectedBoatClass.name}</Badge> : null}
               {liveState?.raceDurationSeconds ? <Badge variant="secondary">Duration {formatRaceTime(liveState.raceDurationSeconds)}</Badge> : null}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Committee view for start signals, mark rounding, UFD, protests and finish timing.
+              Competition code: <span className="font-mono">{competition.competitionCode || competition.publicCode}</span> · Committee view for start signals, mark rounding, UFD, protests and finish timing.
             </p>
           </div>
           <div className="grid min-w-48 gap-2">
+            <Select value={selectedBoatClass?.id ?? ""} onValueChange={setSelectedBoatClassId}>
+              <SelectTrigger><SelectValue placeholder="Boat class" /></SelectTrigger>
+              <SelectContent>
+                {boatClassOptions.map((boatClass) => (
+                  <SelectItem key={boatClass.id} value={boatClass.id}>{boatClass.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={String(raceNumber)} onValueChange={(value) => setRaceNumber(Number(value))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -137,6 +196,7 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
                 <Button variant="secondary" size="sm" onClick={markFinished}>Finish race</Button>
                 <Button variant="outline" size="sm" onClick={reopenRace}>Reopen</Button>
                 <Button variant="outline" size="sm" onClick={recalculateRace}>Recalculate</Button>
+                <Button variant="outline" size="sm" onClick={copyPublicClassLink}>Share class</Button>
               </div>
             ) : null}
           </div>
@@ -174,8 +234,8 @@ export function LiveRace({ competition, publicMode = false, onCompetitionSaved }
         ) : null}
       </section>
 
-      <LiveStartTimer competition={competition} liveState={liveState} readOnly={publicMode} onStateChange={updateLocalLiveState} />
-      <LiveRaceTable competition={competition} raceId={raceId} liveState={liveState} liveData={liveData} readOnly={publicMode} onCompetitionSaved={onCompetitionSaved} />
+      <LiveStartTimer competition={scopedCompetition} liveState={liveState} readOnly={publicMode} onStateChange={updateLocalLiveState} />
+      <LiveRaceTable competition={scopedCompetition} raceId={raceId} liveState={liveState} liveData={liveData} readOnly={publicMode} onCompetitionSaved={(next) => saveScoped(next)} />
       {!publicMode ? <ProtestForm competitionId={competition.id} raceId={raceId} /> : null}
 
       {liveData.protests.length ? (

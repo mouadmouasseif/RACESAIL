@@ -21,6 +21,8 @@ import type {
 } from "@/types";
 import { getFirebaseClient, notifyFirebaseError } from "@/lib/firebase";
 import { getClassFlagCode } from "@/lib/sailingFlags";
+import { filterAthletesByBoatClass, getAthleteBoatClassId } from "@/lib/boatClassHelpers";
+import { sailNumberMatches } from "@/lib/sailNumber";
 
 export type LiveRaceData = {
   state?: RaceLiveState;
@@ -41,8 +43,8 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
-export function liveRaceId(competitionId: string, raceNumber: number) {
-  return `${competitionId}-race-${raceNumber}`;
+export function liveRaceId(competitionId: string, raceNumber: number, boatClassId?: string) {
+  return `${competitionId}-${boatClassId ? `${boatClassId}-` : ""}race-${raceNumber}`;
 }
 
 function localKey(competitionId: string, raceId: string) {
@@ -81,12 +83,13 @@ function livePath(competitionId: string, raceId: string) {
   return `competitions/${competitionId}/liveRaces/${raceId}`;
 }
 
-export function createInitialLiveState(competition: Competition, raceNumber: number): RaceLiveState {
+export function createInitialLiveState(competition: Competition, raceNumber: number, boatClassId?: string): RaceLiveState {
   const now = Date.now();
-  const raceId = liveRaceId(competition.id, raceNumber);
+  const raceId = liveRaceId(competition.id, raceNumber, boatClassId);
   return {
     raceId,
     competitionId: competition.id,
+    boatClassId,
     raceNumber,
     status: "not_started",
     countdownMode: "5min",
@@ -98,11 +101,13 @@ export function createInitialLiveState(competition: Competition, raceNumber: num
   };
 }
 
-export function createStartList(competition: Competition, raceId: string): RaceStartListItem[] {
-  return competition.athletes.map((athlete) => ({
+export function createStartList(competition: Competition, raceId: string, boatClassId?: string): RaceStartListItem[] {
+  const athletes = boatClassId ? filterAthletesByBoatClass(competition.athletes, boatClassId) : competition.athletes;
+  return athletes.map((athlete) => ({
     id: `${raceId}-${athlete.sailNumber}`,
     competitionId: competition.id,
     raceId,
+    boatClassId: getAthleteBoatClassId(athlete),
     sailNumber: athlete.sailNumber,
     sailorName: `${athlete.firstName} ${athlete.lastName}`.trim(),
     club: athlete.clubName,
@@ -112,11 +117,11 @@ export function createStartList(competition: Competition, raceId: string): RaceS
   }));
 }
 
-export async function ensureLiveRace(competition: Competition, raceNumber: number) {
-  const raceId = liveRaceId(competition.id, raceNumber);
+export async function ensureLiveRace(competition: Competition, raceNumber: number, boatClassId?: string) {
+  const raceId = liveRaceId(competition.id, raceNumber, boatClassId);
   const localData = readLocalLiveData(competition.id, raceId);
-  const state = localData.state ?? createInitialLiveState(competition, raceNumber);
-  const startList = localData.startList.length > 0 ? localData.startList : createStartList(competition, raceId);
+  const state = localData.state ?? createInitialLiveState(competition, raceNumber, boatClassId);
+  const startList = localData.startList.length > 0 ? localData.startList : createStartList(competition, raceId, boatClassId);
   writeLocalLiveData(competition.id, raceId, { ...localData, state, startList });
 
   if (!canUseFirebase()) return { ...localData, state, startList };
@@ -200,6 +205,12 @@ export async function markBoatStarted({ competitionId, raceId, sailNumber }: { c
 
 export async function recordMark({ competitionId, raceId, sailNumber, markType }: { competitionId: string; raceId: string; sailNumber: string; markType: MarkType }) {
   const timestamp = Date.now();
+  const localData = readLocalLiveData(competitionId, raceId);
+  const alreadyRecorded = localData.marks.some((mark) => mark.markType === markType && sailNumberMatches(sailNumber, mark.sailNumber));
+  if (alreadyRecorded) {
+    return localData.marks.find((mark) => mark.markType === markType && sailNumberMatches(sailNumber, mark.sailNumber));
+  }
+
   const record: RaceMarkRecord = {
     id: createId(markType),
     raceId,
@@ -209,7 +220,6 @@ export async function recordMark({ competitionId, raceId, sailNumber, markType }
     timestamp,
   };
 
-  const localData = readLocalLiveData(competitionId, raceId);
   const marks = [...localData.marks, record];
   writeLocalLiveData(competitionId, raceId, { ...localData, marks });
 
@@ -267,7 +277,7 @@ export async function createProtest(input: {
   const protester = input.protesterSailNumber.trim();
   const protested = input.protestedSailNumber.trim();
   if (!protester || !protested) throw new Error("Protester and protested sail numbers are required.");
-  if (protester === protested) throw new Error("Protester and protested sail numbers must be different.");
+  if (sailNumberMatches(protester, protested)) throw new Error("Protester and protested sail numbers must be different.");
 
   const now = Date.now();
   const record: ProtestRecord = {

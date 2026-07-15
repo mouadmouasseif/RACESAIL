@@ -1,5 +1,5 @@
 export const penaltyCodes = ["OK", "UFD", "BFD", "DNC", "DNF", "DNS", "DSQ", "RET", "ZFP", "SCP", "DPI", "RDG", "OCS"] as const;
-export const boatClasses = ["Optimist", "ILCA 4", "ILCA 6", "ILCA 7", "Catamaran", "Other"] as const;
+export const boatClasses = ["Optimist", "ILCA 4", "ILCA 6", "ILCA 7", "Catamaran", "Windsurf", "Other"] as const;
 export const raceStatuses = ["Draft", "Finished", "Corrected"] as const;
 
 export type PenaltyCode = (typeof penaltyCodes)[number];
@@ -7,6 +7,17 @@ export type RacePenaltyCode = "NONE" | "DPI" | "SCP" | "ZFP" | "UFD" | "BFD" | "
 export type BoatClass = (typeof boatClasses)[number];
 export type RaceStatus = (typeof raceStatuses)[number];
 export type Sex = "M" | "F";
+export type BoatClassId = string;
+
+export type CompetitionBoatClass = {
+  id: BoatClassId;
+  name: string;
+  shortName?: string;
+  logoUrl?: string;
+  color?: string;
+  startOrder?: number;
+  enabled: boolean;
+};
 
 export type RaceResult = {
   raceNumber: number;
@@ -36,6 +47,7 @@ export type Athlete = {
   clubName: string;
   clubLogo?: string;
   sailNumber: string;
+  boatClassId?: BoatClassId;
   boatClass: BoatClass;
   licenseNumber?: string;
   results: Record<number, RaceResult>;
@@ -46,6 +58,10 @@ export type Athlete = {
 };
 
 export type Race = {
+  id?: string;
+  competitionId?: string;
+  boatClassId?: BoatClassId;
+  name?: string;
   raceNumber: number;
   status: RaceStatus;
   results: RaceResult[];
@@ -55,6 +71,7 @@ export type Race = {
 export type RaceNotification = {
   id: string;
   competitionId: string;
+  boatClassId?: BoatClassId;
   raceNumber: number;
   title: string;
   message: string;
@@ -103,6 +120,7 @@ export type UFDRecord = {
 export type RaceLiveState = {
   raceId: string;
   competitionId: string;
+  boatClassId?: BoatClassId;
   raceNumber: number;
   status: RaceLiveStatus;
   countdownMode: StartCountdownMode;
@@ -124,6 +142,7 @@ export type RaceStartListItem = {
   id: string;
   competitionId: string;
   raceId: string;
+  boatClassId?: BoatClassId;
   sailNumber: string;
   sailorName: string;
   club?: string;
@@ -147,6 +166,7 @@ export type Competition = {
   location: string;
   date: string;
   boatClass: BoatClass;
+  boatClasses?: CompetitionBoatClass[];
   raceCount: number;
   scoringSystem: "Low Point";
   athletes: Athlete[];

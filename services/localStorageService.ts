@@ -5,6 +5,7 @@ import { demoCompetition } from "@/services/seed";
 import { createBlankRaces, getFinishedRaceCount, rankAthletes, scoreRaceResult } from "@/lib/scoring";
 import { getAthleteCategory, getFlagEmoji } from "@/lib/flags";
 import { generateCompetitionCode } from "@/lib/utils";
+import { boatClassIdFromName, getCompetitionBoatClasses } from "@/lib/boatClassHelpers";
 
 const STORAGE_KEY = "raceSail.competitions";
 const OLD_SYNC_QUEUE_KEY = "raceSail.firebaseSyncQueue";
@@ -94,6 +95,7 @@ function normalizeAthlete(athlete: Partial<Athlete> & { results?: Record<string,
     clubName: athlete.clubName ?? "",
     clubLogo: athlete.clubLogo,
     sailNumber: athlete.sailNumber ?? "",
+    boatClassId: athlete.boatClassId ?? boatClassIdFromName(String(athlete.boatClass ?? "Optimist")),
     boatClass: (athlete.boatClass as BoatClass) ?? "Optimist",
     licenseNumber: athlete.licenseNumber,
     results,
@@ -130,6 +132,23 @@ function normalizeCompetition(competition: Partial<Competition> & { status?: str
     location: competition.location ?? "",
     date: competition.date ?? new Date().toISOString().slice(0, 10),
     boatClass: (competition.boatClass as BoatClass) ?? "Optimist",
+    boatClasses: getCompetitionBoatClasses({
+      ...(competition as Competition),
+      id: competition.id ?? "migration",
+      publicCode: competition.publicCode ?? "",
+      isLivePublished: competition.isLivePublished ?? false,
+      name: competition.name ?? "Untitled Competition",
+      clubName: competition.clubName ?? "",
+      location: competition.location ?? "",
+      date: competition.date ?? new Date().toISOString().slice(0, 10),
+      boatClass: (competition.boatClass as BoatClass) ?? "Optimist",
+      raceCount,
+      scoringSystem: "Low Point",
+      athletes,
+      races,
+      createdAt: competition.createdAt ?? new Date().toISOString(),
+      updatedAt: competition.updatedAt ?? new Date().toISOString(),
+    }),
     raceCount,
     scoringSystem: "Low Point",
     athletes,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, RotateCcw, Search, Trash2, Unlock } from "lucide-react";
 import { penaltyCodes, type Competition, type RacePenaltyCode } from "@/types";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/lib/raceResultsAuto";
 import { raceNumbers } from "@/lib/scoring";
 import { sailNumberMatches } from "@/lib/sailNumber";
+import { filterAthletesByBoatClass, getCompetitionBoatClasses, toBoatClassName } from "@/lib/boatClassHelpers";
 import { competitionStore } from "@/services/localStorageService";
 import { createRaceNotification, syncCompetitionToFirestore } from "@/services/firebaseService";
 import { showRaceFinishedNotification } from "@/services/notificationService";
@@ -30,19 +31,38 @@ const advancedPenalties = ["UFD", "BFD", "DNC", "DNF", "DNS", "DSQ", "RET", "ZFP
 
 export function RaceManagement({ competition, onSaved }: { competition: Competition; onSaved: (competition: Competition) => void }) {
   const [raceNumber, setRaceNumber] = useState(1);
+  const boatClassOptions = useMemo(() => getCompetitionBoatClasses(competition), [competition]);
+  const [boatClassId, setBoatClassId] = useState(() => boatClassOptions[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [penaltyCode, setPenaltyCode] = useState<RacePenaltyCode>("UFD");
   const [penaltyPoints, setPenaltyPoints] = useState("");
   const [notes, setNotes] = useState("");
   const race = competition.races.find((item) => item.raceNumber === raceNumber);
+  const selectedBoatClass = boatClassOptions.find((item) => item.id === boatClassId) ?? boatClassOptions[0];
+  const classAthletes = useMemo(
+    () => selectedBoatClass ? filterAthletesByBoatClass(competition.athletes, selectedBoatClass.id) : competition.athletes,
+    [competition.athletes, selectedBoatClass],
+  );
+  const scopedCompetition = useMemo(() => ({
+    ...competition,
+    boatClass: toBoatClassName(selectedBoatClass?.name ?? competition.boatClass),
+    athletes: classAthletes,
+  }), [classAthletes, competition, selectedBoatClass]);
+
+  useEffect(() => {
+    if (!boatClassOptions.length) return;
+    if (!boatClassId || !boatClassOptions.some((item) => item.id === boatClassId)) {
+      setBoatClassId(boatClassOptions[0].id);
+    }
+  }, [boatClassId, boatClassOptions]);
 
   const matches = useMemo(() => {
     if (!search.trim()) return [];
-    return competition.athletes.filter((athlete) => sailNumberMatches(search, athlete.sailNumber)).slice(0, 6);
-  }, [competition.athletes, search]);
+    return classAthletes.filter((athlete) => sailNumberMatches(search, athlete.sailNumber)).slice(0, 6);
+  }, [classAthletes, search]);
 
   const raceRows = useMemo(() => {
-    return competition.athletes
+    return classAthletes
       .map((athlete) => ({ athlete, result: athlete.results[raceNumber] }))
       .filter((row) => row.result)
       .sort((a, b) => {
@@ -51,14 +71,20 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
         if (left !== right) return left - right;
         return a.athlete.sailNumber.localeCompare(b.athlete.sailNumber);
       });
-  }, [competition.athletes, raceNumber]);
+  }, [classAthletes, raceNumber]);
 
   function createId(prefix: string) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   function saveUpdated(next: Competition, finished = false) {
-    const saved = competitionStore.create(next);
+    const nextById = new Map(next.athletes.map((athlete) => [athlete.id, athlete]));
+    const saved = competitionStore.create({
+      ...competition,
+      athletes: competition.athletes.map((athlete) => nextById.get(athlete.id) ?? athlete),
+      races: next.races,
+      updatedAt: new Date().toISOString(),
+    });
     onSaved(saved);
     void syncCompetitionToFirestore(saved);
 
@@ -79,23 +105,24 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
   }
 
   function addFinish(sailNumber = search) {
-    const athlete = findAthleteBySailNumber(competition, sailNumber);
+    const athlete = findAthleteBySailNumber(scopedCompetition, sailNumber);
     if (!athlete) return;
-    saveUpdated(addAutomaticFinish(competition, raceNumber, athlete.sailNumber));
+    saveUpdated(addAutomaticFinish(scopedCompetition, raceNumber, athlete.sailNumber));
     setSearch("");
   }
 
   function addPenalty(sailNumber = search) {
-    const athlete = findAthleteBySailNumber(competition, sailNumber);
+    const athlete = findAthleteBySailNumber(scopedCompetition, sailNumber);
     if (!athlete) return;
-    saveUpdated(setRacePenalty(competition, raceNumber, athlete.sailNumber, penaltyCode, penaltyPoints ? Number(penaltyPoints) : undefined, notes));
+    saveUpdated(setRacePenalty(scopedCompetition, raceNumber, athlete.sailNumber, penaltyCode, penaltyPoints ? Number(penaltyPoints) : undefined, notes));
     setSearch("");
     setPenaltyPoints("");
     setNotes("");
   }
 
   function finishRace() {
-    saveUpdated(finishRaceWithDnc(competition, raceNumber), true);
+    if (!window.confirm(`Finish ${selectedBoatClass?.name ?? "class"} race ${raceNumber}? Missing boats in this class will become DNC.`)) return;
+    saveUpdated(finishRaceWithDnc(scopedCompetition, raceNumber), true);
   }
 
   return (
@@ -109,7 +136,17 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid gap-4 xl:grid-cols-[170px_1fr_280px_auto] xl:items-end">
+        <div className="grid gap-4 xl:grid-cols-[170px_170px_1fr_280px_auto] xl:items-end">
+          <div className="grid gap-2">
+            <Label>Boat class</Label>
+            <Select value={selectedBoatClass?.id ?? ""} onValueChange={setBoatClassId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {boatClassOptions.map((boatClass) => <SelectItem key={boatClass.id} value={boatClass.id}>{boatClass.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid gap-2">
             <Label>Race number</Label>
             <Select value={String(raceNumber)} onValueChange={(value) => setRaceNumber(Number(value))}>
@@ -160,11 +197,11 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
             <Button onClick={() => addFinish()}><CheckCircle2 className="h-4 w-4" /> Add finish</Button>
             <Button variant="secondary" onClick={() => addPenalty()}>Add penalty</Button>
             {race?.status === "Finished" ? (
-              <Button variant="outline" onClick={() => saveUpdated(openRace(competition, raceNumber))}><Unlock className="h-4 w-4" /> Reopen</Button>
+              <Button variant="outline" onClick={() => saveUpdated(openRace(scopedCompetition, raceNumber))}><Unlock className="h-4 w-4" /> Reopen</Button>
             ) : (
               <Button onClick={finishRace}>Finish race</Button>
             )}
-            <Button variant="outline" onClick={() => saveUpdated(recalculateRaceResults(competition, raceNumber))}><RotateCcw className="h-4 w-4" /> Recalculate</Button>
+            <Button variant="outline" onClick={() => saveUpdated(recalculateRaceResults(scopedCompetition, raceNumber))}><RotateCcw className="h-4 w-4" /> Recalculate</Button>
           </div>
         </div>
 
@@ -190,7 +227,7 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
                   <TableCell>{athlete.firstName} {athlete.lastName}</TableCell>
                   <TableCell>{athlete.clubName}</TableCell>
                   <TableCell>
-                    <Select value={(result?.penaltyCode ?? (result?.penalty === "OK" ? "NONE" : result?.penalty ?? "NONE")) as string} onValueChange={(value) => saveUpdated(setRacePenalty(competition, raceNumber, athlete.sailNumber, value as RacePenaltyCode))}>
+                    <Select value={(result?.penaltyCode ?? (result?.penalty === "OK" ? "NONE" : result?.penalty ?? "NONE")) as string} onValueChange={(value) => saveUpdated(setRacePenalty(scopedCompetition, raceNumber, athlete.sailNumber, value as RacePenaltyCode))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">NONE</SelectItem>
@@ -202,9 +239,9 @@ export function RaceManagement({ competition, onSaved }: { competition: Competit
                   <TableCell>{result?.notes ?? "-"}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      <Button variant="outline" size="icon" onClick={() => saveUpdated(moveRaceResult(competition, raceNumber, athlete.sailNumber, -1))}><ArrowUp className="h-4 w-4" /></Button>
-                      <Button variant="outline" size="icon" onClick={() => saveUpdated(moveRaceResult(competition, raceNumber, athlete.sailNumber, 1))}><ArrowDown className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => saveUpdated(removeRaceResult(competition, raceNumber, athlete.sailNumber))}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                      <Button variant="outline" size="icon" onClick={() => saveUpdated(moveRaceResult(scopedCompetition, raceNumber, athlete.sailNumber, -1))}><ArrowUp className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" onClick={() => saveUpdated(moveRaceResult(scopedCompetition, raceNumber, athlete.sailNumber, 1))}><ArrowDown className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => saveUpdated(removeRaceResult(scopedCompetition, raceNumber, athlete.sailNumber))}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
