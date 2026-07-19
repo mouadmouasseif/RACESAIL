@@ -34,33 +34,39 @@ function exportRows(competition: Competition) {
   });
 }
 
-function youngestParticipantRows(competition: Competition) {
+function youngestParticipantWinner(competition: Competition) {
   return rankedAthletes(competition.athletes, competition.raceCount, getFinishedRaceCount(competition.races))
     .filter((athlete) => Number.isFinite(Number(athlete.age)) && Number(athlete.age) > 0)
-    .sort((a, b) => Number(a.age) - Number(b.age) || a.rank - b.rank)
-    .map((athlete, index) => ({
-      Rank: index + 1,
-      Sail: athlete.sailNumber,
-      Athlete: `${athlete.firstName} ${athlete.lastName}`,
-      Age: athlete.age,
-      Sex: athlete.sex,
-      Category: athlete.category,
-      Nationality: athlete.nationality,
-      Club: athlete.clubName,
-      BoatClass: athlete.boatClass,
-    }));
+    .sort((a, b) => Number(a.age) - Number(b.age) || a.rank - b.rank)[0];
+}
+
+function youngestParticipantRows(competition: Competition) {
+  const athlete = youngestParticipantWinner(competition);
+  if (!athlete) return [];
+
+  return [{
+    Winner: "Youngest participant",
+    Sail: athlete.sailNumber,
+    Athlete: `${athlete.firstName} ${athlete.lastName}`,
+    Age: athlete.age,
+    Sex: athlete.sex,
+    Category: athlete.category,
+    Nationality: athlete.nationality,
+    Club: athlete.clubName,
+    BoatClass: athlete.boatClass,
+  }];
 }
 
 export function downloadCsv(competition: Competition) {
   const rows = exportRows(competition);
   const headers = Object.keys(rows[0] ?? { Rank: "", Sail: "", Flag: "", Athlete: "", Total: "", Discard: "", Net: "", "Final Rank": "" });
   const youngestRows = youngestParticipantRows(competition);
-  const youngestHeaders = Object.keys(youngestRows[0] ?? { Rank: "", Sail: "", Athlete: "", Age: "", Nationality: "", Club: "", BoatClass: "" });
+  const youngestHeaders = Object.keys(youngestRows[0] ?? { Winner: "", Sail: "", Athlete: "", Age: "", Nationality: "", Club: "", BoatClass: "" });
   const csv = [
     headers.join(","),
     ...rows.map((row) => headers.map((header) => JSON.stringify(String(row[header as keyof typeof row] ?? ""))).join(",")),
     "",
-    "Youngest participants ranking",
+    "Youngest participant winner",
     youngestHeaders.join(","),
     ...youngestRows.map((row) => youngestHeaders.map((header) => JSON.stringify(String(row[header as keyof typeof row] ?? ""))).join(",")),
   ].join("\n");
@@ -217,7 +223,7 @@ function addPrizesPage(doc: jsPDF, autoTable: typeof import("jspdf-autotable").d
     ...rows.filter((athlete) => athlete.sex === "F").slice(0, 3).map((athlete, index) => ["GIRLS", index + 1, athlete.sailNumber, `${athlete.firstName} ${athlete.lastName}`, athlete.age, athlete.nationality, athlete.clubName]),
     ...rows.filter((athlete) => athlete.category === "B").slice(0, 3).map((athlete, index) => ["BENJAMIN", index + 1, athlete.sailNumber, `${athlete.firstName} ${athlete.lastName}`, athlete.age, athlete.nationality, athlete.clubName]),
     ...rows.filter((athlete) => athlete.category === "J").slice(0, 3).map((athlete, index) => ["JUNIOR", index + 1, athlete.sailNumber, `${athlete.firstName} ${athlete.lastName}`, athlete.age, athlete.nationality, athlete.clubName]),
-    ...youngestParticipantRows(competition).slice(0, 3).map((athlete) => ["YOUNGEST", athlete.Rank, athlete.Sail, athlete.Athlete, athlete.Age, athlete.Nationality, athlete.Club]),
+    ...youngestParticipantRows(competition).map((athlete) => ["YOUNGEST", 1, athlete.Sail, athlete.Athlete, athlete.Age, athlete.Nationality, athlete.Club]),
   ];
   const pageWidth = doc.internal.pageSize.getWidth();
 
